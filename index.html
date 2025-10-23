@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waypoint App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        .add-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .add-btn:hover {
+            background-color: #45a049;
+        }
+        
+        .clear-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .clear-btn:hover {
+            background-color: #da190b;
+        }
+        
+        .distance-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        
+        .distance-control label {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .distance-slider {
+            width: 200px;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .distance-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+        
+        .distance-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .distance-value {
+            font-weight: bold;
+            color: #4CAF50;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        #waypointCanvas {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            display: block;
+            margin: 0 auto;
+            cursor: crosshair;
+        }
+        
+        .instructions {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Waypoint Creator</h1>
+        
+        <div class="controls">
+            <button id="addWaypoint" class="add-btn">Add Random Waypoint</button>
+            <button id="regenerateWaypoints" class="add-btn">Regenerate 20 Waypoints</button>
+            <button id="clearWaypoints" class="clear-btn">Clear All</button>
+        </div>
+        
+        <div class="distance-control">
+            <label for="minDistanceSlider">Minimum Distance:</label>
+            <input type="range" id="minDistanceSlider" class="distance-slider" min="20" max="100" value="60">
+            <span id="distanceValue" class="distance-value">60px</span>
+        </div>
+        
+        <canvas id="waypointCanvas" width="800" height="600"></canvas>
+        
+        <div class="instructions">
+            <p><strong>Auto-generated:</strong> The app starts with 20 waypoints automatically generated following all rules.</p>
+            <p><strong>First waypoint:</strong> Click anywhere on the canvas to place it.</p>
+            <p><strong>Subsequent waypoints:</strong> Click near the last waypoint to place the next one in the closest cardinal direction (North, South, East, or West) at a random distance.</p>
+            <p><strong>Variable distances:</strong> Each waypoint is placed 60-140 pixels away from the previous one, creating varied spacing.</p>
+            <p><strong>Configurable minimum distance:</strong> Use the slider above to adjust the minimum distance between waypoints (20-100px).</p>
+            <p><strong>No Overlaps:</strong> Waypoints will never overlap with existing waypoints. If your preferred direction would overlap, the system will try alternative cardinal directions.</p>
+            <p>Use "Add Random Waypoint" to add individual waypoints, "Regenerate 20 Waypoints" to create a new set, or "Clear All" to start over.</p>
+        </div>
+    </div>
+    
+    <script src="dist/index.js"></script>
+</body>
+</html>
