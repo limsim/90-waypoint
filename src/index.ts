@@ -404,6 +404,7 @@ export class WaypointApp {
 
     setupEventListeners(): void {
         document.getElementById('generateBtn')!.addEventListener('click', () => this.generateWalk());
+        document.getElementById('printBtn')!.addEventListener('click', () => window.print());
 
         document.getElementById('clearBtn')!.addEventListener('click', () => {
             this.waypoints = [];
