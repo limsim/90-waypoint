@@ -3,6 +3,7 @@ interface WaypointData {
     y: number;
     number: number;
     turn: 'L' | 'R' | 'Wildcard';
+    heading: Heading;
     cumulativeDistance: number;
     isWildcard: boolean;
 }
@@ -10,8 +11,6 @@ interface WaypointData {
 type Heading = 'N' | 'E' | 'S' | 'W';
 
 
-// Wildcard positions (0-based): walker goes straight instead of turning
-const WILDCARD_INDICES = new Set<number>([8, 17, 26, 35, 44, 53, 62, 71, 80, 89]);
 
 const HEADING_DELTA: Record<Heading, { dx: number; dy: number }> = {
     N: { dx: 0, dy: -1 },
@@ -41,14 +40,18 @@ export class WaypointApp {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private waypoints: WaypointData[] = [];
+    private waypointCountInput: HTMLInputElement;
     private showWildcardsCheckbox: HTMLInputElement;
+    private showTurnsCheckbox: HTMLInputElement;
     private tooltip: HTMLDivElement;
     private hoveredIndex: number = -1;
 
     constructor() {
         this.canvas = document.getElementById('waypointCanvas') as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d')!;
+        this.waypointCountInput = document.getElementById('waypointCount') as HTMLInputElement;
         this.showWildcardsCheckbox = document.getElementById('showWildcards') as HTMLInputElement;
+        this.showTurnsCheckbox = document.getElementById('showTurns') as HTMLInputElement;
         this.tooltip = document.getElementById('tooltip') as HTMLDivElement;
         this.updateDisplaySize();
         this.setupEventListeners();
@@ -60,14 +63,22 @@ export class WaypointApp {
     generateWalk(): void {
         let waypoints: WaypointData[] | null = null;
         let scale = 1.0;
-        const turnSequence = Array.from({ length: 90 }, () => Math.random() < 0.5 ? 'L' : 'R') as ('L' | 'R')[];
+        const count = Math.min(90, Math.max(10, parseInt(this.waypointCountInput.value, 10) || 90));
+        const turnSequence = Array.from({ length: count }, () => Math.random() < 0.5 ? 'L' : 'R') as ('L' | 'R')[];
+        const wildcardCount = Math.max(1, Math.round(count / 9));
+        const shuffled = Array.from({ length: count - 3 }, (_, i) => i + 2);
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        const wildcardIndices = new Set(shuffled.slice(0, wildcardCount));
 
         while (!waypoints) {
             const W = Math.round(A4_W * scale);
             const H = Math.round(A4_H * scale);
 
             for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
-                const candidate = this.tryGenerate(W, H, turnSequence);
+                const candidate = this.tryGenerate(W, H, turnSequence, count, wildcardIndices);
                 if (this.isValid(candidate)) {
                     waypoints = candidate;
                     break;
@@ -103,7 +114,7 @@ export class WaypointApp {
 
     // ─── Generation ──────────────────────────────────────────────────────────
 
-    private tryGenerate(W: number, H: number, turnSequence: ('L' | 'R')[]): WaypointData[] {
+    private tryGenerate(W: number, H: number, turnSequence: ('L' | 'R')[], count: number, wildcardIndices: Set<number>): WaypointData[] {
         const padding = 30;
         const minDist = 60;
 
@@ -113,8 +124,8 @@ export class WaypointApp {
         let cumDist = 0;
         const result: WaypointData[] = [];
 
-        for (let i = 0; i < 90; i++) {
-            const isWildcard = WILDCARD_INDICES.has(i);
+        for (let i = 0; i < count; i++) {
+            const isWildcard = wildcardIndices.has(i);
             let turn: 'L' | 'R' | 'Wildcard';
 
             if (isWildcard) {
@@ -219,8 +230,16 @@ export class WaypointApp {
             }
 
             cumDist += segLen;
-            result.push({ x, y, number: i + 1, turn, cumulativeDistance: Math.round(cumDist), isWildcard });
+            result.push({ x, y, number: i + 1, turn, heading, cumulativeDistance: Math.round(cumDist), isWildcard });
         }
+
+        // Shift turns so each waypoint records the outbound turn (the turn made when
+        // leaving that waypoint to reach the next), not the inbound turn used to arrive.
+        for (let i = 0; i < result.length - 1; i++) {
+            result[i].turn = result[i + 1].turn;
+            result[i].isWildcard = result[i + 1].isWildcard;
+        }
+        // Last waypoint has no outbound turn — keep the field but it won't be displayed.
 
         return result;
     }
@@ -342,21 +361,36 @@ export class WaypointApp {
             ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, a.y); // horizontal first
-            ctx.lineTo(b.x, b.y); // then vertical
+            if (a.turn === 'R') {
+                ctx.lineTo(b.x, a.y); // right turn: horizontal first
+                ctx.lineTo(b.x, b.y);
+            } else if (a.turn === 'L') {
+                ctx.lineTo(a.x, b.y); // left turn: vertical first
+                ctx.lineTo(b.x, b.y);
+            } else {
+                // wildcard: no turn, continue in heading direction
+                if (b.heading === 'N' || b.heading === 'S') {
+                    ctx.lineTo(a.x, b.y);
+                    ctx.lineTo(b.x, b.y);
+                } else {
+                    ctx.lineTo(b.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                }
+            }
             ctx.stroke();
         }
     }
 
     private drawWaypoints(): void {
         const showWildcards = this.showWildcardsCheckbox.checked;
-        this.waypoints.forEach((wp, i) => this.drawWaypoint(wp, i === this.hoveredIndex, showWildcards));
+        const showTurns = this.showTurnsCheckbox.checked;
+        this.waypoints.forEach((wp, i) => this.drawWaypoint(wp, i === this.hoveredIndex, showWildcards, showTurns));
     }
 
-    private drawWaypoint(wp: WaypointData, isHovered: boolean, showWildcards: boolean): void {
+    private drawWaypoint(wp: WaypointData, isHovered: boolean, showWildcards: boolean, showTurns: boolean): void {
         const ctx = this.ctx;
         const r = 25;
-        const isEndpoint = wp.number === 1 || wp.number === 90;
+        const isEndpoint = wp.number === 1 || wp.number === this.waypoints.length;
 
         if (isHovered) {
             ctx.save();
@@ -387,6 +421,16 @@ export class WaypointApp {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(wp.number), wp.x, wp.y);
+
+        if (showTurns && wp.number !== this.waypoints.length) {
+            const label = wp.turn === 'Wildcard' ? 'W' : wp.turn;
+            const offset = r + 10;
+            ctx.font = 'bold 13px Arial';
+            ctx.fillStyle = wp.turn === 'Wildcard' ? '#f5a623' : '#e00';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(label, wp.x + offset * 0.707, wp.y - offset * 0.707);
+        }
     }
 
     // ─── Event handling ───────────────────────────────────────────────────────
@@ -406,6 +450,7 @@ export class WaypointApp {
         });
 
         this.showWildcardsCheckbox.addEventListener('change', () => this.drawCanvas());
+        this.showTurnsCheckbox.addEventListener('change', () => this.drawCanvas());
 
         window.addEventListener('resize', () => this.updateDisplaySize());
 

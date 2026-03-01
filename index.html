@@ -71,6 +71,14 @@
             color: #333;
         }
 
+        input[type="number"] {
+            width: 56px;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
         .canvas-wrapper {
             position: relative;
             display: inline-block;
@@ -161,9 +169,21 @@
             <button id="printBtn">Print</button>
 
             <div class="control-group">
+                <label for="waypointCount">Waypoints:</label>
+                <input type="number" id="waypointCount" min="10" max="90" value="90">
+            </div>
+
+            <div class="control-group">
                 <label>
                     <input type="checkbox" id="showWildcards" checked>
                     Show Wildcards
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="showTurns">
+                    Show Turns
                 </label>
             </div>
         </div>
@@ -176,7 +196,7 @@
         <div class="legend">
             <div class="legend-item">
                 <div class="legend-dot endpoint"></div>
-                <span>Start / End (waypoints 1 &amp; 90)</span>
+                <span>Start / End</span>
             </div>
             <div class="legend-item">
                 <div class="legend-dot middle"></div>
@@ -184,7 +204,7 @@
             </div>
             <div class="legend-item">
                 <div class="legend-ring"></div>
-                <span>Wildcard — walker goes straight (10 total)</span>
+                <span>Wildcard — walker goes straight</span>
             </div>
         </div>
     </div>

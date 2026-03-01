@@ -11,8 +11,8 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 ## Map Generation
 
 ### Turn Sequence
-- The walk consists of exactly **90 waypoints**, each representing a turn: **Left (L)** or **Right (R)** relative to the current direction of travel.
-- The turn sequence is **randomised** on each generation — a new sequence of 90 L/R values is generated each time **Generate Walk** is clicked.
+- The walk consists of between **10 and 90 waypoints** (configurable), each representing a turn: **Left (L)** or **Right (R)** relative to the current direction of travel.
+- The turn sequence is **randomised** on each generation — a new sequence of L/R values is generated each time **Generate Walk** is clicked.
 - The walker begins facing **North** (up on the canvas).
 - At each waypoint, apply the turn to update the heading: L turns 90° counter-clockwise, R turns 90° clockwise.
 - After the turn, the walker travels in the new heading until the next waypoint.
@@ -22,8 +22,10 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - All waypoints must remain within the canvas bounds (30px padding from all edges). If a segment would go out of bounds, pick the next available cardinal direction that keeps the path in bounds, then continue applying the turn sequence from there.
 
 ### Wildcards
-- The walk includes **10 wildcards**. A wildcard skips a waypoint's turn — the walker continues straight ahead instead of turning.
-- Wildcards are distributed across the sequence (e.g. every ~9th waypoint) or can be user-triggered.
+- A wildcard skips a waypoint's turn — the walker continues straight ahead instead of turning.
+- The number of wildcards scales with the waypoint count: `max(1, round(count / 9))` wildcards per walk.
+- Wildcard positions are **randomised** on each generation.
+- The first and last waypoints cannot be wildcards.
 - Visual indicator marks which waypoints are wildcards.
 
 ---
@@ -35,7 +37,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - Grid lines are subtle (light grey).
 
 ### Path Lines
-- Connect consecutive waypoints with **orthogonal lines** (no diagonals): draw the horizontal segment first, then the vertical.
+- Connect consecutive waypoints with **orthogonal lines** (no diagonals), drawn in the direction of the outbound turn at each waypoint: right turns corner horizontally first; left turns corner vertically first; wildcards follow the current heading.
 - Line colour: dark grey or black.
 - Line weight: 2px.
 - Parallel path lines must maintain a **comfortable minimum separation** — no two parallel segments that share overlapping range should be closer than the circle diameter (50px). If a new segment would run too close to an existing parallel segment, try alternative headings or segment lengths before placing.
@@ -43,10 +45,10 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 ### Waypoints
 - Each waypoint is a **circle, radius 25px**, centred at its coordinate.
 - **Waypoint 1 (start):** Black fill, white border, white number.
-- **Waypoint 90 (end):** Black fill, white border, white number.
+- **Last waypoint (end):** Black fill, white border, white number.
 - **All other waypoints:** White fill, black border, black number.
 - Wildcard waypoints: add a secondary visual marker (e.g. a small star or coloured ring).
-- Label each waypoint with its sequence number (**1–90**) in bold Arial 20px, centred in the circle.
+- Label each waypoint with its sequence number in bold Arial 20px, centred in the circle.
 - Waypoints must not overlap — no two waypoint circles may share the same position or overlap each other.
 
 ### Iterate design
@@ -60,9 +62,11 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 
 | Control | Behaviour |
 |---|---|
-| **Generate Walk** | Clears the canvas and draws a new walk using the fixed turn sequence with newly randomised segment distances. |
+| **Generate Walk** | Clears the canvas and draws a new walk with a freshly randomised turn sequence and segment distances. |
 | **Clear** | Removes all waypoints and lines from the canvas. |
+| **Waypoints** | Number input, range 10–90, default 90. Sets the number of waypoints for the next generation. |
 | **Show/Hide Wildcards** | Toggle visibility of wildcard markers. |
+| **Show Turns** | Debug toggle. When enabled, displays the outbound turn direction (L, R, or W for wildcard) beside each waypoint. Hidden by default. |
 | **Print** | Opens the browser print dialog; prints the canvas and legend on a single A4 page with all other UI chrome hidden. |
 
 ---
