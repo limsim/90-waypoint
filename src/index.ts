@@ -9,18 +9,6 @@ interface WaypointData {
 
 type Heading = 'N' | 'E' | 'S' | 'W';
 
-// Fixed 90-turn sequence from the original Munich walk
-const TURN_SEQUENCE: ReadonlyArray<'L' | 'R'> = [
-    'R','L','R','R','L','R','L','L','R','L',
-    'R','R','L','L','R','L','R','L','R','R',
-    'L','R','L','R','L','L','R','R','L','R',
-    'L','L','R','L','R','R','L','R','L','L',
-    'R','L','R','L','R','R','L','L','R','R',
-    'L','R','R','L','R','L','L','R','L','R',
-    'R','L','L','R','R','L','R','L','R','L',
-    'L','R','L','R','R','L','L','R','L','R',
-    'R','L','R','L','L','R','R','L','R','L',
-];
 
 // Wildcard positions (0-based): walker goes straight instead of turning
 const WILDCARD_INDICES = new Set<number>([8, 17, 26, 35, 44, 53, 62, 71, 80, 89]);
@@ -72,13 +60,14 @@ export class WaypointApp {
     generateWalk(): void {
         let waypoints: WaypointData[] | null = null;
         let scale = 1.0;
+        const turnSequence = Array.from({ length: 90 }, () => Math.random() < 0.5 ? 'L' : 'R') as ('L' | 'R')[];
 
         while (!waypoints) {
             const W = Math.round(A4_W * scale);
             const H = Math.round(A4_H * scale);
 
             for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
-                const candidate = this.tryGenerate(W, H);
+                const candidate = this.tryGenerate(W, H, turnSequence);
                 if (this.isValid(candidate)) {
                     waypoints = candidate;
                     break;
@@ -114,7 +103,7 @@ export class WaypointApp {
 
     // ─── Generation ──────────────────────────────────────────────────────────
 
-    private tryGenerate(W: number, H: number): WaypointData[] {
+    private tryGenerate(W: number, H: number, turnSequence: ('L' | 'R')[]): WaypointData[] {
         const padding = 30;
         const minDist = 60;
 
@@ -131,7 +120,7 @@ export class WaypointApp {
             if (isWildcard) {
                 turn = 'Wildcard';
             } else {
-                const t = TURN_SEQUENCE[i];
+                const t = turnSequence[i];
                 heading = t === 'L' ? TURN_LEFT[heading] : TURN_RIGHT[heading];
                 turn = t;
             }

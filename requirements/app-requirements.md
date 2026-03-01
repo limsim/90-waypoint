@@ -12,7 +12,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 
 ### Turn Sequence
 - The walk consists of exactly **90 waypoints**, each representing a turn: **Left (L)** or **Right (R)** relative to the current direction of travel.
-- The turn sequence is **fixed** — it does not change between runs. Embed a hardcoded sequence of 90 L/R values representing the original Munich walk. If the exact sequence is unavailable, generate one randomly on first load and persist it for the session.
+- The turn sequence is **randomised** on each generation — a new sequence of 90 L/R values is generated each time **Generate Walk** is clicked.
 - The walker begins facing **North** (up on the canvas).
 - At each waypoint, apply the turn to update the heading: L turns 90° counter-clockwise, R turns 90° clockwise.
 - After the turn, the walker travels in the new heading until the next waypoint.
