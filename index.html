@@ -71,14 +71,6 @@
             color: #333;
         }
 
-        input[type="range"] { width: 130px; }
-
-        #distanceValue {
-            min-width: 36px;
-            font-weight: bold;
-            color: #555;
-        }
-
         .canvas-wrapper {
             position: relative;
             display: inline-block;
@@ -153,12 +145,6 @@
             <button id="clearBtn">Clear</button>
 
             <div class="control-group">
-                <label for="minDistanceSlider">Min Distance:</label>
-                <input type="range" id="minDistanceSlider" min="20" max="100" value="60">
-                <span id="distanceValue">60px</span>
-            </div>
-
-            <div class="control-group">
                 <label>
                     <input type="checkbox" id="showWildcards" checked>
                     Show Wildcards
@@ -167,7 +153,7 @@
         </div>
 
         <div class="canvas-wrapper">
-            <canvas id="waypointCanvas" width="800" height="800"></canvas>
+            <canvas id="waypointCanvas" width="794" height="1123"></canvas>
             <div id="tooltip"></div>
         </div>
 

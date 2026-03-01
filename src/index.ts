@@ -35,23 +35,24 @@ const HEADING_DELTA: Record<Heading, { dx: number; dy: number }> = {
 const TURN_LEFT: Record<Heading, Heading>  = { N: 'W', W: 'S', S: 'E', E: 'N' };
 const TURN_RIGHT: Record<Heading, Heading> = { N: 'E', E: 'S', S: 'W', W: 'N' };
 
-// Minimum centre-to-centre distance before two circles visually overlap (diameter + 2px buffer)
-const CIRCLE_SEP = 52;
+// Minimum centre-to-centre distance before two circles visually overlap (diameter + 22px gap)
+const CIRCLE_SEP = 72;
+// Waypoint circle radius
+const CIRCLE_R = 25;
 // Minimum separation between parallel path lines (just above circle diameter)
 const LINE_SEP = 55;
-// Padding around the bounding box when fitting canvas to path
-const CANVAS_PAD = 100;
-// Large virtual workspace used during generation so the path isn't constrained to screen size
-const VIRTUAL_SIZE = 4000;
-// How many generation attempts to make before declaring failure
-const MAX_ATTEMPTS = 300;
+// A4 portrait at 96 PPI
+const A4_W = 794;
+const A4_H = 1123;
+// Attempts per canvas size tier before growing the canvas
+const ATTEMPTS_PER_SIZE = 50;
+// How much to grow the canvas each tier (10% of A4 per step)
+const SCALE_STEP = 0.1;
 
 export class WaypointApp {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private waypoints: WaypointData[] = [];
-    private minDistanceSlider: HTMLInputElement;
-    private distanceValueSpan: HTMLSpanElement;
     private showWildcardsCheckbox: HTMLInputElement;
     private tooltip: HTMLDivElement;
     private hoveredIndex: number = -1;
@@ -59,10 +60,9 @@ export class WaypointApp {
     constructor() {
         this.canvas = document.getElementById('waypointCanvas') as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d')!;
-        this.minDistanceSlider = document.getElementById('minDistanceSlider') as HTMLInputElement;
-        this.distanceValueSpan = document.getElementById('distanceValue') as HTMLSpanElement;
         this.showWildcardsCheckbox = document.getElementById('showWildcards') as HTMLInputElement;
         this.tooltip = document.getElementById('tooltip') as HTMLDivElement;
+        this.updateDisplaySize();
         this.setupEventListeners();
         this.generateWalk();
     }
@@ -71,26 +71,41 @@ export class WaypointApp {
 
     generateWalk(): void {
         let waypoints: WaypointData[] | null = null;
+        let scale = 1.0;
 
-        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            const candidate = this.tryGenerate();
-            if (this.isValid(candidate)) {
-                waypoints = candidate;
-                break;
+        while (!waypoints) {
+            const W = Math.round(A4_W * scale);
+            const H = Math.round(A4_H * scale);
+
+            for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
+                const candidate = this.tryGenerate(W, H);
+                if (this.isValid(candidate)) {
+                    waypoints = candidate;
+                    break;
+                }
+            }
+
+            if (!waypoints) {
+                scale += SCALE_STEP;
             }
         }
 
-        if (!waypoints) {
-            // All attempts exhausted without meeting the criteria.
-            // Per requirements: only render when criteria are met — show an error instead.
-            this.waypoints = [];
-            this.hoveredIndex = -1;
-            this.hideTooltip();
-            this.drawGenerationError();
-            return;
-        }
+        // Resize canvas to the tier that succeeded
+        const W = Math.round(A4_W * scale);
+        const H = Math.round(A4_H * scale);
+        this.canvas.width  = W;
+        this.canvas.height = H;
+        this.updateDisplaySize();
 
-        this.fitCanvasToPath(waypoints);
+        // Centre path on the canvas
+        const xs = waypoints.map(w => w.x);
+        const ys = waypoints.map(w => w.y);
+        const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+        const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+        const ox = W / 2 - cx;
+        const oy = H / 2 - cy;
+        for (const w of waypoints) { w.x += ox; w.y += oy; }
+
         this.waypoints = waypoints;
         this.hoveredIndex = -1;
         this.hideTooltip();
@@ -99,11 +114,9 @@ export class WaypointApp {
 
     // ─── Generation ──────────────────────────────────────────────────────────
 
-    private tryGenerate(): WaypointData[] {
+    private tryGenerate(W: number, H: number): WaypointData[] {
         const padding = 30;
-        const minDist = this.getMinDistance();
-        const W = VIRTUAL_SIZE;
-        const H = VIRTUAL_SIZE;
+        const minDist = 60;
 
         let x = W / 2;
         let y = H / 2;
@@ -155,13 +168,29 @@ export class WaypointApp {
                 return false;
             };
 
+            // Reject any candidate whose L-shaped path (horizontal then vertical) passes
+            // through the circle of an already-placed waypoint (excluding the segment start).
+            const segCrossesCircle = (sx: number, sy: number, ex: number, ey: number): boolean => {
+                const hlo = Math.min(sx, ex), hhi = Math.max(sx, ex);
+                const vlo = Math.min(sy, ey), vhi = Math.max(sy, ey);
+                const lastIdx = result.length - 1; // segment start — skip this one
+                for (let k = 0; k < lastIdx; k++) {
+                    const { x: wx, y: wy } = result[k];
+                    // Horizontal leg: y = sy, x ∈ [hlo, hhi]
+                    if (Math.abs(wy - sy) < CIRCLE_R && wx >= hlo && wx <= hhi) return true;
+                    // Vertical leg: x = ex, y ∈ [vlo, vhi]
+                    if (Math.abs(wx - ex) < CIRCLE_R && wy >= vlo && wy <= vhi) return true;
+                }
+                return false;
+            };
+
             // Prescribed heading first, then the other three. For each heading try a range
             // of segment length multipliers — path lines can be any length to satisfy spacing.
             const candidates: Heading[] = [
                 heading,
                 ...(['N', 'E', 'S', 'W'] as Heading[]).filter(h => h !== heading),
             ];
-            const multipliers = [1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33, 5.0];
+            const multipliers = [1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33, 5.0, 6.0, 7.0, 8.0];
 
             let placed = false;
             outer: for (const h of candidates) {
@@ -171,7 +200,7 @@ export class WaypointApp {
                     if (len < CIRCLE_SEP) continue; // segment too short — circles would overlap
                     const nx = x + dx * len;
                     const ny = y + dy * len;
-                    if (inBounds(nx, ny) && !overlaps(nx, ny) && !segTooClose(x, y, nx, ny)) {
+                    if (inBounds(nx, ny) && !overlaps(nx, ny) && !segTooClose(x, y, nx, ny) && !segCrossesCircle(x, y, nx, ny)) {
                         x = nx;
                         y = ny;
                         heading = h;
@@ -241,37 +270,30 @@ export class WaypointApp {
             }
         }
 
+        // No L-shaped segment may pass through a non-adjacent waypoint circle
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const a = waypoints[i];
+            const b = waypoints[i + 1];
+            const hlo = Math.min(a.x, b.x), hhi = Math.max(a.x, b.x);
+            const vlo = Math.min(a.y, b.y), vhi = Math.max(a.y, b.y);
+            for (let k = 0; k < waypoints.length; k++) {
+                if (k === i || k === i + 1) continue;
+                const { x: wx, y: wy } = waypoints[k];
+                if (Math.abs(wy - a.y) < CIRCLE_R && wx >= hlo && wx <= hhi) return false;
+                if (Math.abs(wx - b.x) < CIRCLE_R && wy >= vlo && wy <= vhi) return false;
+            }
+        }
+
         return true;
     }
 
     // ─── Canvas sizing ───────────────────────────────────────────────────────
 
-    private fitCanvasToPath(waypoints: WaypointData[]): void {
-        const xs = waypoints.map(w => w.x);
-        const ys = waypoints.map(w => w.y);
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-
-        // Translate all waypoints so the path sits inside CANVAS_PAD on each side
-        const ox = CANVAS_PAD - minX;
-        const oy = CANVAS_PAD - minY;
-        for (const w of waypoints) { w.x += ox; w.y += oy; }
-
-        // Resize the canvas logical resolution to fit the path exactly
-        this.canvas.width  = Math.round(maxX - minX + CANVAS_PAD * 2);
-        this.canvas.height = Math.round(maxY - minY + CANVAS_PAD * 2);
-
-        this.updateDisplaySize();
-    }
-
     private updateDisplaySize(): void {
         const maxW = window.innerWidth - 40;
         if (this.canvas.width > maxW) {
-            const scale = maxW / this.canvas.width;
             this.canvas.style.width  = `${maxW}px`;
-            this.canvas.style.height = `${Math.round(this.canvas.height * scale)}px`;
+            this.canvas.style.height = `${Math.round(this.canvas.height * maxW / this.canvas.width)}px`;
         } else {
             this.canvas.style.width  = `${this.canvas.width}px`;
             this.canvas.style.height = `${this.canvas.height}px`;
@@ -279,21 +301,6 @@ export class WaypointApp {
     }
 
     // ─── Rendering ───────────────────────────────────────────────────────────
-
-    private drawGenerationError(): void {
-        this.canvas.width  = 500;
-        this.canvas.height = 160;
-        this.updateDisplaySize();
-        const ctx = this.ctx;
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.fillStyle = '#555';
-        ctx.font = '15px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Could not generate a valid walk after ' + MAX_ATTEMPTS + ' attempts.', 250, 65);
-        ctx.fillText('Try again, or reduce the minimum distance.', 250, 95);
-    }
 
     drawCanvas(): void {
         const { ctx, canvas } = this;
@@ -309,7 +316,7 @@ export class WaypointApp {
     private drawGrid(): void {
         const wps = this.waypoints;
         const pad = 100;
-        const cell = this.getMinDistance();
+        const cell = 60;
         const minX = Math.max(0, Math.min(...wps.map(w => w.x)) - pad);
         const maxX = Math.min(this.canvas.width,  Math.max(...wps.map(w => w.x)) + pad);
         const minY = Math.max(0, Math.min(...wps.map(w => w.y)) - pad);
@@ -402,11 +409,10 @@ export class WaypointApp {
             this.waypoints = [];
             this.hoveredIndex = -1;
             this.hideTooltip();
+            this.canvas.width  = A4_W;
+            this.canvas.height = A4_H;
+            this.updateDisplaySize();
             this.drawCanvas();
-        });
-
-        this.minDistanceSlider.addEventListener('input', () => {
-            this.distanceValueSpan.textContent = `${this.minDistanceSlider.value}px`;
         });
 
         this.showWildcardsCheckbox.addEventListener('change', () => this.drawCanvas());
@@ -469,9 +475,6 @@ export class WaypointApp {
         this.tooltip.style.display = 'none';
     }
 
-    private getMinDistance(): number {
-        return parseInt(this.minDistanceSlider.value, 10);
-    }
 }
 
 new WaypointApp();

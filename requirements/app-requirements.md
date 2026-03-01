@@ -40,7 +40,6 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - Line colour: dark grey or black.
 - Line weight: 2px.
 - Parallel path lines must maintain a **comfortable minimum separation** — no two parallel segments that share overlapping range should be closer than the circle diameter (50px). If a new segment would run too close to an existing parallel segment, try alternative headings or segment lengths before placing.
-Path lines can be any length to priotise **comfortable minimum separation**.
 
 ### Waypoints
 - Each waypoint is a **circle, radius 25px**, centred at its coordinate.
@@ -52,7 +51,8 @@ Path lines can be any length to priotise **comfortable minimum separation**.
 - Waypoints must not overlap — no two waypoint circles may share the same position or overlap each other.
 
 ### Iterate design
-- Iterate designs until all path lines have **comfortable minimum separation** AND **no overlapping waypoints**.
+- Iterate designs until all path lines and waypoints have **comfortable minimum separation** AND **no overlapping waypoints**.
+- Path lines can be any length to prioritise **comfortable minimum separation**.
 - Only render the design when the above criteria has been met. 
 
 ---
@@ -69,7 +69,7 @@ Path lines can be any length to priotise **comfortable minimum separation**.
 ---
 
 ## Canvas Size
-- Canvas size should be adjusted to fit the waypoints.
+- Canvas size must be A4 size.
 - The path auto-centres after generation so the full walk is visible within the canvas.
 
 ---
