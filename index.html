@@ -136,17 +136,18 @@
         }
 
         @media print {
-            @page { size: A4 portrait; margin: 0; }
+            @page { size: A4 portrait; margin: 10mm; }
             body { padding: 0; background: #fff; }
             .container { box-shadow: none; border-radius: 0; padding: 0; margin: 0; max-width: none; }
-            .toolbar, .legend, h1, #tooltip { display: none !important; }
+            .toolbar, h1, #tooltip { display: none !important; }
             .canvas-wrapper { display: block; }
             canvas {
                 display: block !important;
                 border: none !important;
-                width: 210mm !important;
-                height: auto !important;
+                height: 245mm !important;
+                width: auto !important;
             }
+            .legend { margin-top: 6mm; color: #000; }
         }
     </style>
 </head>

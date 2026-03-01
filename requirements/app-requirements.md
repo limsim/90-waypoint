@@ -18,8 +18,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - After the turn, the walker travels in the new heading until the next waypoint.
 
 ### Distances
-- The distance between consecutive waypoints (segment length) is **randomised per segment**, between a configurable minimum distance and `minDistance + 80px`.
-- Default minimum distance: **60px**.
+- The distance between consecutive waypoints (segment length) is **randomised per segment**, between **60px and 140px**.
 - All waypoints must remain within the canvas bounds (30px padding from all edges). If a segment would go out of bounds, pick the next available cardinal direction that keeps the path in bounds, then continue applying the turn sequence from there.
 
 ### Wildcards
@@ -63,13 +62,14 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 |---|---|
 | **Generate Walk** | Clears the canvas and draws a new walk using the fixed turn sequence with newly randomised segment distances. |
 | **Clear** | Removes all waypoints and lines from the canvas. |
-| **Min Distance slider** | Range 20–100px. Adjusts the minimum segment length for subsequent generations. |
 | **Show/Hide Wildcards** | Toggle visibility of wildcard markers. |
+| **Print** | Opens the browser print dialog; prints the canvas and legend on a single A4 page with all other UI chrome hidden. |
 
 ---
 
 ## Canvas Size
-- Canvas size must be A4 size.
+- Canvas starts at A4 size (794×1123px at 96 PPI).
+- If no valid layout can be found after 50 attempts at the current size, the canvas grows by 10% and generation retries. This repeats until a valid walk is produced.
 - The path auto-centres after generation so the full walk is visible within the canvas.
 
 ---
