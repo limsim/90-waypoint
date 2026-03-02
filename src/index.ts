@@ -132,7 +132,7 @@ export class WaypointApp {
                 turn = 'Wildcard';
             } else {
                 const t = turnSequence[i];
-                heading = t === 'L' ? TURN_LEFT[heading] : TURN_RIGHT[heading];
+                if (i > 1) heading = t === 'L' ? TURN_LEFT[heading] : TURN_RIGHT[heading];
                 turn = t;
             }
 
