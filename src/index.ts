@@ -422,7 +422,7 @@ export class WaypointApp {
         ctx.textBaseline = 'middle';
         ctx.fillText(String(wp.number), wp.x, wp.y);
 
-        if (showTurns && wp.number !== this.waypoints.length) {
+        if (showTurns && wp.number !== 1 && wp.number !== this.waypoints.length) {
             const label = wp.turn === 'Wildcard' ? 'W' : wp.turn;
             const offset = r + 10;
             ctx.font = 'bold 13px Arial';
