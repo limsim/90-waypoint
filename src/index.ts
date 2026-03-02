@@ -3,7 +3,7 @@ import {
     HEADING_DELTA, TURN_LEFT, TURN_RIGHT,
     CIRCLE_R, A4_W, A4_H, ATTEMPTS_PER_SIZE, SCALE_STEP,
     tryGenerate, isValid,
-} from './walk';
+} from './walk.js';
 
 export class WaypointApp {
     private canvas: HTMLCanvasElement;
