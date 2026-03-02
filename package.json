@@ -6,13 +6,23 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "serve": "python3 -m http.server 8000"
+    "serve": "python3 -m http.server 8000",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "jsdom": "^28.1.0",
     "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "vitest": "^4.0.18"
   },
-  "keywords": ["waypoint", "typescript", "canvas"],
+  "keywords": [
+    "waypoint",
+    "typescript",
+    "canvas"
+  ],
   "author": "",
   "license": "MIT"
 }
