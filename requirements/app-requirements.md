@@ -14,9 +14,10 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - The walk consists of between **10 and 90 waypoints** (configurable), each representing a turn: **Left (L)** or **Right (R)** relative to the current direction of travel.
 - The turn sequence is **randomised** on each generation — a new sequence of L/R values is generated each time **Generate Walk** is clicked.
 - The walker begins facing **North** (up on the canvas).
-- At each waypoint, apply the turn to update the heading: L turns 90° counter-clockwise, R turns 90° clockwise.
-- After the turn, the walker travels in the new heading until the next waypoint.
-- Each waypoint records the **outbound turn** — the turn taken when leaving that waypoint toward the next — not the inbound turn used to arrive. The last waypoint has no outbound turn.
+- The first waypoint is always oriented facing North — the walker travels straight North to reach it, with no turn applied. The path from waypoint 1 to waypoint 2 therefore exits straight upward.
+- Turns from the sequence are applied from the **third waypoint** onwards (i.e. the first turn determines how to arrive at waypoint 3).
+- At each waypoint (from waypoint 3 onwards), apply the turn to update the heading: L turns 90° counter-clockwise, R turns 90° clockwise. After the turn, the walker travels in the new heading until the next waypoint.
+- Each waypoint records the **outbound turn** — the turn taken when leaving that waypoint toward the next — not the inbound turn used to arrive. The **first and last waypoints** have no outbound turn and display no turn label.
 
 ### Distances
 - The distance between consecutive waypoints (segment length) is **randomised per segment**, between **60px and 140px**.
@@ -68,7 +69,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 | **Clear** | Removes all waypoints and lines from the canvas. |
 | **Waypoints** | Number input, range 10–90, default 90. Sets the number of waypoints for the next generation. |
 | **Show/Hide Wildcards** | Toggle visibility of wildcard markers. Wildcards are **visible by default**. |
-| **Show Turns** | Debug toggle. When enabled, displays the outbound turn direction (L, R, or W for wildcard) beside each waypoint. Hidden by default. |
+| **Show Turns** | Toggle. When enabled, displays the outbound turn direction (L, R, or W for wildcard) beside each waypoint (first and last waypoints show no label). **Visible by default.** |
 | **Print** | Opens the browser print dialog; prints the canvas and legend on a single A4 page with all other UI chrome hidden. |
 
 ---
