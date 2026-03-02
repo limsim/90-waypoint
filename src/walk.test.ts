@@ -121,6 +121,17 @@ describe('isValid()', () => {
         ];
         expect(isValid(path)).toBe(true);
     });
+
+    it('segment path crosses non-adjacent waypoint circle → false', () => {
+        // wp[1]→wp[2] is an L-shaped path whose horizontal leg (y=200, x∈[200,500])
+        // passes directly through wp[0]'s circle centred at (200,200).
+        const path: WaypointData[] = [
+            { x: 200, y: 200, number: 1, turn: 'R', heading: 'E', isWildcard: false, cumulativeDistance: 0 },
+            { x: 500, y: 200, number: 2, turn: 'R', heading: 'S', isWildcard: false, cumulativeDistance: 300 },
+            { x: 200, y: 500, number: 3, turn: 'L', heading: 'W', isWildcard: false, cumulativeDistance: 700 },
+        ];
+        expect(isValid(path)).toBe(false);
+    });
 });
 
 // ─── Wildcard index selection ─────────────────────────────────────────────────

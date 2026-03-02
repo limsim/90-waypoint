@@ -123,4 +123,71 @@ describe('WaypointApp', () => {
         const app = new WaypointApp();
         expect((app as any).hitTest(-9999, -9999)).toBe(-1);
     });
+
+    it('mousemove over then off waypoint updates hoveredIndex and cursor', async () => {
+        const { WaypointApp } = await import('./index');
+        const app = new WaypointApp();
+        const waypoints: any[] = (app as any).waypoints;
+        if (waypoints.length === 0) return;
+        const wp = waypoints[0];
+        const canvas = document.getElementById('waypointCanvas') as HTMLCanvasElement;
+
+        canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: wp.x, clientY: wp.y, bubbles: true }));
+        expect((app as any).hoveredIndex).toBe(0);
+        expect(canvas.style.cursor).toBe('pointer');
+
+        canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: -9999, clientY: -9999, bubbles: true }));
+        expect((app as any).hoveredIndex).toBe(-1);
+        expect(canvas.style.cursor).toBe('default');
+    });
+
+    it('mouseleave resets hoveredIndex and cursor to default', async () => {
+        const { WaypointApp } = await import('./index');
+        const app = new WaypointApp();
+        (app as any).hoveredIndex = 2;
+        const canvas = document.getElementById('waypointCanvas') as HTMLCanvasElement;
+        canvas.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+        expect((app as any).hoveredIndex).toBe(-1);
+        expect(canvas.style.cursor).toBe('default');
+    });
+
+    it('drawCanvas calls ctx.save/restore when a waypoint is hovered', async () => {
+        const { WaypointApp } = await import('./index');
+        const app = new WaypointApp();
+        (app as any).hoveredIndex = 0;
+        // Reset mock counts so only the following drawCanvas call is measured.
+        vi.clearAllMocks();
+        (app as any).drawCanvas();
+        expect(mockCtx.save).toHaveBeenCalled();
+        expect(mockCtx.restore).toHaveBeenCalled();
+    });
+
+    it('drawCanvas renders wildcard path with N/S heading and wildcard ring', async () => {
+        const { WaypointApp } = await import('./index');
+        const app = new WaypointApp();
+        // Waypoint 0: turn='Wildcard' → drawPathLines uses the wildcard else-branch.
+        // b.heading='N' → N/S sub-branch (lineTo(a.x, b.y) first).
+        // Waypoint 1: isWildcard=true → wildcard ring drawn when showWildcards=true.
+        (app as any).waypoints = [
+            { x: 200, y: 400, number: 1, turn: 'Wildcard', heading: 'S', isWildcard: false, cumulativeDistance: 0 },
+            { x: 200, y: 100, number: 2, turn: 'L',        heading: 'N', isWildcard: true,  cumulativeDistance: 300 },
+            { x: 500, y: 100, number: 3, turn: 'R',        heading: 'E', isWildcard: false, cumulativeDistance: 600 },
+        ];
+        expect(() => (app as any).drawCanvas()).not.toThrow();
+    });
+
+    it('drawCanvas renders wildcard path with E/W heading, wildcard ring, and wildcard turn label', async () => {
+        const { WaypointApp } = await import('./index');
+        const app = new WaypointApp();
+        // Waypoint 1: turn='Wildcard' → drawPathLines uses the wildcard else-branch.
+        // b.heading='W' → E/W sub-branch (lineTo(b.x, a.y) first).
+        // Waypoint 1: isWildcard=true AND turn='Wildcard', number=2 (not endpoint)
+        //   → wildcard ring drawn AND wildcard turn label ('W' in orange) rendered.
+        (app as any).waypoints = [
+            { x: 100, y: 200, number: 1, turn: 'R',        heading: 'E', isWildcard: false, cumulativeDistance: 0 },
+            { x: 400, y: 200, number: 2, turn: 'Wildcard', heading: 'E', isWildcard: true,  cumulativeDistance: 300 },
+            { x: 700, y: 200, number: 3, turn: 'L',        heading: 'W', isWildcard: false, cumulativeDistance: 600 },
+        ];
+        expect(() => (app as any).drawCanvas()).not.toThrow();
+    });
 });
