@@ -133,6 +133,51 @@ export function segCrossesCircle(
     return false;
 }
 
+/**
+ * Returns true if placing a waypoint at (toX, toY) reached from (fromX, fromY)
+ * satisfies all layout constraints against the existing result array.
+ */
+export function canPlace(
+    result: WaypointData[],
+    fromX: number, fromY: number,
+    toX: number, toY: number,
+    W: number, H: number,
+    padding = 30,
+): boolean {
+    if (!inBounds(toX, toY, W, H, padding)) return false;
+    if (overlaps(toX, toY, result)) return false;
+
+    // New segment vs all existing segments
+    for (let j = 0; j < result.length - 1; j++) {
+        if (segTooClose(fromX, fromY, toX, toY, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y)) return false;
+    }
+
+    // New segment crosses existing circles (skip segment-start circle = last in result)
+    const lastIdx = result.length - 1;
+    for (let k = 0; k < lastIdx; k++) {
+        if (segCrossesCircle(fromX, fromY, toX, toY, result[k].x, result[k].y, CIRCLE_R)) return false;
+    }
+
+    // Existing segments pass through new circle
+    for (let j = 0; j < result.length - 1; j++) {
+        if (pointToSegDist(toX, toY, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < CIRCLE_R) return false;
+    }
+
+    // New segment vs existing label zones (skip index 0 — waypoint 1 has no label)
+    for (let k = 1; k < result.length; k++) {
+        const { x: lx, y: ly } = turnLabelPos(result[k]);
+        if (pointToSegDist(lx, ly, fromX, fromY, toX, toY) < TURN_LABEL_CLEARANCE) return false;
+    }
+
+    // New waypoint's NE label vs all existing segments
+    const { x: lx, y: ly } = turnLabelPos({ x: toX, y: toY } as WaypointData);
+    for (let j = 0; j < result.length - 1; j++) {
+        if (pointToSegDist(lx, ly, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < TURN_LABEL_CLEARANCE) return false;
+    }
+
+    return true;
+}
+
 // ─── Generation ──────────────────────────────────────────────────────────────
 
 export function tryGenerate(
@@ -150,102 +195,85 @@ export function tryGenerate(
     let cumDist = 0;
     const result: WaypointData[] = [];
 
-    // Local wrappers that check new segment/position against result built so far
-    const checkTooClose = (sx: number, sy: number, ex: number, ey: number): boolean => {
-        for (let j = 0; j < result.length - 1; j++) {
-            if (segTooClose(sx, sy, ex, ey, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y)) return true;
-        }
-        return false;
+    const multipliers = [
+        1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33,
+        5.0, 6.0, 7.0, 8.0,
+        // Fill gaps: 0.5→0.75 (critical for near-wall placements with large segLen)
+        0.60, 0.65, 0.70,
+        // Fill gap: 1.0→1.5
+        1.1, 1.25,
+    ];
+    // Smaller set used at the inner (depth-1) level to keep 2-step lookahead cheap.
+    const lookaheadMults = [1.0, 0.75, 1.5, 0.5, 2.0, 3.0, 4.0, 0.65];
+
+    /** Compute the intended heading for a given generation index given the arrival heading. */
+    const intendedHeadingFor = (idx: number, arrivalHeading: Heading): Heading => {
+        if (wildcardIndices.has(idx) || idx <= 1) return arrivalHeading;
+        const t = turnSequence[idx];
+        return t === 'L' ? TURN_LEFT[arrivalHeading] : TURN_RIGHT[arrivalHeading];
     };
 
-    const checkCrossesCircle = (sx: number, sy: number, ex: number, ey: number): boolean => {
-        const lastIdx = result.length - 1; // segment start — skip this one
-        for (let k = 0; k < lastIdx; k++) {
-            if (segCrossesCircle(sx, sy, ex, ey, result[k].x, result[k].y, CIRCLE_R)) return true;
-        }
-        return false;
-    };
-
-    // Check that old segments don't pass through the circle at the new waypoint position.
-    const checkOldSegsAtNewCircle = (px: number, py: number): boolean => {
-        for (let j = 0; j < result.length - 1; j++) {
-            if (pointToSegDist(px, py, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < CIRCLE_R) return true;
-        }
-        return false;
-    };
-
-    // Check new straight segment against all existing waypoints' label zones.
-    const checkLabelZones = (sx: number, sy: number, ex: number, ey: number): boolean => {
-        for (let k = 1; k < result.length; k++) { // skip k=0 (waypoint 1 has no label)
-            const { x: lx, y: ly } = turnLabelPos(result[k]);
-            if (pointToSegDist(lx, ly, sx, sy, ex, ey) < TURN_LABEL_CLEARANCE) return true;
-        }
-        return false;
-    };
-
-    // Check that the new waypoint's own label has clearance from all existing (non-adjacent) segments.
-    // Adjacent segments (the new segment itself) are not yet in result, so all result segments qualify.
-    const checkNewLabelVsOldSegs = (px: number, py: number): boolean => {
-        const { x: lx, y: ly } = turnLabelPos({ x: px, y: py } as WaypointData);
-        for (let j = 0; j < result.length - 1; j++) {
-            if (pointToSegDist(lx, ly, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < TURN_LABEL_CLEARANCE) return true;
+    /**
+     * 2-step lookahead: check that waypoint nextIdx CAN be placed, and that
+     * waypoint nextIdx+1 can also be placed from at least one of those positions.
+     */
+    const canPlaceNext = (tentativeResult: WaypointData[], fromX: number, fromY: number, nextIdx: number): boolean => {
+        if (nextIdx >= count) return true;
+        const nextHeading = intendedHeadingFor(nextIdx, tentativeResult[tentativeResult.length - 1].heading);
+        const { dx, dy } = HEADING_DELTA[nextHeading];
+        const baseLookaheadLen = minDist + 40;
+        for (const mult of multipliers) {
+            const len = baseLookaheadLen * mult;
+            if (len < CIRCLE_SEP) continue;
+            const nx = fromX + dx * len, ny = fromY + dy * len;
+            if (!canPlace(tentativeResult, fromX, fromY, nx, ny, W, H, padding)) continue;
+            // Depth-1: check that nextIdx+1 can also be placed from (nx, ny).
+            if (nextIdx + 1 >= count) return true;
+            const isWildcard1 = wildcardIndices.has(nextIdx);
+            const tentWp: WaypointData = { x: nx, y: ny, number: nextIdx + 1, turn: isWildcard1 ? 'Wildcard' : turnSequence[nextIdx], heading: nextHeading, cumulativeDistance: 0, isWildcard: isWildcard1 };
+            const tentResult1 = [...tentativeResult, tentWp];
+            const nextHeading1 = intendedHeadingFor(nextIdx + 1, nextHeading);
+            const { dx: dx1, dy: dy1 } = HEADING_DELTA[nextHeading1];
+            for (const mult1 of lookaheadMults) {
+                const len1 = baseLookaheadLen * mult1;
+                if (len1 < CIRCLE_SEP) continue;
+                if (canPlace(tentResult1, nx, ny, nx + dx1 * len1, ny + dy1 * len1, W, H, padding)) return true;
+            }
+            // No position at nextIdx+1 works from this nx,ny — try next mult.
         }
         return false;
     };
 
     for (let i = 0; i < count; i++) {
         const isWildcard = wildcardIndices.has(i);
-        let turn: 'L' | 'R' | 'Wildcard';
-
-        // Candidate headings: for non-wildcard steps (i > 1), try the intended turn first,
-        // then the opposite turn as fallback. The label is updated to match whichever
-        // heading actually succeeds, so it always matches the path direction.
-        const origHeading = heading; // heading arriving at this step (before any turn)
-        const candidateHeadings: Heading[] = [];
-        if (isWildcard) {
-            turn = 'Wildcard';
-            candidateHeadings.push(heading); // wildcards always go straight
-        } else {
-            const t = turnSequence[i];
-            turn = t;
-            if (i > 1) {
-                candidateHeadings.push(t === 'L' ? TURN_LEFT[heading] : TURN_RIGHT[heading]); // intended
-                candidateHeadings.push(t === 'L' ? TURN_RIGHT[heading] : TURN_LEFT[heading]); // fallback
-            } else {
-                candidateHeadings.push(heading); // i=0,1: no turn applied
-            }
-        }
+        const turn: 'L' | 'R' | 'Wildcard' = isWildcard ? 'Wildcard' : turnSequence[i];
+        const intendedHeading = intendedHeadingFor(i, heading);
 
         const segLen = minDist + Math.random() * 80;
-        const multipliers = [1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33, 5.0, 6.0, 7.0, 8.0];
+        const { dx, dy } = HEADING_DELTA[intendedHeading];
 
-        for (const candidateHeading of candidateHeadings) {
-            const { dx, dy } = HEADING_DELTA[candidateHeading];
-            let placed = false;
-            for (const mult of multipliers) {
-                const len = segLen * mult;
-                if (len < CIRCLE_SEP) continue; // segment too short — circles would overlap
-                const nx = x + dx * len;
-                const ny = y + dy * len;
-                if (inBounds(nx, ny, W, H, padding) &&
-                    !overlaps(nx, ny, result) &&
-                    !checkTooClose(x, y, nx, ny) &&
-                    !checkCrossesCircle(x, y, nx, ny) &&
-                    !checkOldSegsAtNewCircle(nx, ny) &&
-                    !checkLabelZones(x, y, nx, ny) &&
-                    !checkNewLabelVsOldSegs(nx, ny)) {
-                    x = nx;
-                    y = ny;
-                    heading = candidateHeading;
-                    // Update turn label to reflect the actual heading taken
-                    if (!isWildcard && i > 1) {
-                        turn = candidateHeading === TURN_LEFT[origHeading] ? 'L' : 'R';
-                    }
-                    placed = true;
-                    break;
-                }
+        let fallback: { nx: number; ny: number } | null = null;
+        for (const mult of multipliers) {
+            const len = segLen * mult;
+            if (len < CIRCLE_SEP) continue;
+            const nx = x + dx * len;
+            const ny = y + dy * len;
+            if (canPlace(result, x, y, nx, ny, W, H, padding)) {
+                if (fallback === null) fallback = { nx, ny };
+                const tentativeWp: WaypointData = { x: nx, y: ny, number: i + 1, turn, heading: intendedHeading, cumulativeDistance: 0, isWildcard };
+                if (!canPlaceNext([...result, tentativeWp], nx, ny, i + 1)) continue;
+                x = nx;
+                y = ny;
+                heading = intendedHeading;
+                fallback = null;
+                break;
             }
-            if (placed) break;
+        }
+        // Lookahead rejected all candidates — use first canPlace-valid position
+        if (fallback !== null) {
+            x = fallback.nx;
+            y = fallback.ny;
+            heading = intendedHeading;
         }
 
         cumDist += segLen;
