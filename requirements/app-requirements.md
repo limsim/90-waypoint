@@ -21,7 +21,8 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 
 ### Distances
 - The distance between consecutive waypoints (segment length) is **randomised per segment**, between **60px and 140px**.
-- All waypoints must remain within the canvas bounds (30px padding from all edges). If a segment would go out of bounds, pick the next available cardinal direction that keeps the path in bounds, then continue applying the turn sequence from there.
+- All waypoints must remain within the canvas bounds (30px padding from all edges).
+- Each segment must exit the waypoint in a direction consistent with the outbound turn label. The intended turn (L or R from the random sequence) is tried first; if it fails, the opposite turn is tried as a fallback. The turn label is updated to match whichever direction succeeds, so labels always reflect the actual path. If neither turn can place the next waypoint, the generation attempt fails and retries.
 
 ### Wildcards
 - A wildcard skips a waypoint's turn — the walker continues straight ahead instead of turning.
@@ -66,7 +67,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
   - Every turn label's fixed NE position has at least 8px clearance from all non-adjacent path segments.
 - Path lines can be any length to satisfy spacing — segment lengths may be scaled up by multipliers (up to 8×).
 - During placement, candidate segments that would violate any of the above criteria (including passing through a waypoint's label zone) are rejected before trying other multipliers or headings.
-- If no valid position can be found with any heading/length combination, fall back to the heading that maximises clearance from existing waypoints (this placement may still fail validation and trigger a new attempt).
+- If neither the intended nor the fallback turn can place the next waypoint, the attempt fails and retries (no fallback to straight or 180° headings).
 - Only render the design when all criteria are met.
 
 ---

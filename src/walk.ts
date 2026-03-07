@@ -30,7 +30,7 @@ export const LINE_SEP = 55;
 export const A4_W = 794;
 export const A4_H = 1123;
 // Attempts per canvas size tier before growing the canvas
-export const ATTEMPTS_PER_SIZE = 50;
+export const ATTEMPTS_PER_SIZE = 200;
 // How much to grow the canvas each tier (10% of A4 per step)
 export const SCALE_STEP = 0.1;
 // Distance from waypoint centre to the fixed NE turn label position.
@@ -166,16 +166,29 @@ export function tryGenerate(
         return false;
     };
 
-    // Check new segment (both L-shape orderings) against all existing waypoints' label zones.
+    // Check that old segments don't pass through the circle at the new waypoint position.
+    const checkOldSegsAtNewCircle = (px: number, py: number): boolean => {
+        for (let j = 0; j < result.length - 1; j++) {
+            if (pointToSegDist(px, py, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < CIRCLE_R) return true;
+        }
+        return false;
+    };
+
+    // Check new straight segment against all existing waypoints' label zones.
     const checkLabelZones = (sx: number, sy: number, ex: number, ey: number): boolean => {
         for (let k = 1; k < result.length; k++) { // skip k=0 (waypoint 1 has no label)
             const { x: lx, y: ly } = turnLabelPos(result[k]);
-            // Horizontal-first legs
-            if (pointToSegDist(lx, ly, sx, sy, ex, sy) < TURN_LABEL_CLEARANCE) return true;
-            if (pointToSegDist(lx, ly, ex, sy, ex, ey) < TURN_LABEL_CLEARANCE) return true;
-            // Vertical-first legs
-            if (pointToSegDist(lx, ly, sx, sy, sx, ey) < TURN_LABEL_CLEARANCE) return true;
-            if (pointToSegDist(lx, ly, sx, ey, ex, ey) < TURN_LABEL_CLEARANCE) return true;
+            if (pointToSegDist(lx, ly, sx, sy, ex, ey) < TURN_LABEL_CLEARANCE) return true;
+        }
+        return false;
+    };
+
+    // Check that the new waypoint's own label has clearance from all existing (non-adjacent) segments.
+    // Adjacent segments (the new segment itself) are not yet in result, so all result segments qualify.
+    const checkNewLabelVsOldSegs = (px: number, py: number): boolean => {
+        const { x: lx, y: ly } = turnLabelPos({ x: px, y: py } as WaypointData);
+        for (let j = 0; j < result.length - 1; j++) {
+            if (pointToSegDist(lx, ly, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < TURN_LABEL_CLEARANCE) return true;
         }
         return false;
     };
@@ -184,28 +197,32 @@ export function tryGenerate(
         const isWildcard = wildcardIndices.has(i);
         let turn: 'L' | 'R' | 'Wildcard';
 
+        // Candidate headings: for non-wildcard steps (i > 1), try the intended turn first,
+        // then the opposite turn as fallback. The label is updated to match whichever
+        // heading actually succeeds, so it always matches the path direction.
+        const origHeading = heading; // heading arriving at this step (before any turn)
+        const candidateHeadings: Heading[] = [];
         if (isWildcard) {
             turn = 'Wildcard';
+            candidateHeadings.push(heading); // wildcards always go straight
         } else {
             const t = turnSequence[i];
-            if (i > 1) heading = t === 'L' ? TURN_LEFT[heading] : TURN_RIGHT[heading];
             turn = t;
+            if (i > 1) {
+                candidateHeadings.push(t === 'L' ? TURN_LEFT[heading] : TURN_RIGHT[heading]); // intended
+                candidateHeadings.push(t === 'L' ? TURN_RIGHT[heading] : TURN_LEFT[heading]); // fallback
+            } else {
+                candidateHeadings.push(heading); // i=0,1: no turn applied
+            }
         }
 
         const segLen = minDist + Math.random() * 80;
-
-        // Prescribed heading first, then the other three. For each heading try a range
-        // of segment length multipliers — path lines can be any length to satisfy spacing.
-        const candidates: Heading[] = [
-            heading,
-            ...(['N', 'E', 'S', 'W'] as Heading[]).filter(h => h !== heading),
-        ];
         const multipliers = [1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33, 5.0, 6.0, 7.0, 8.0];
 
-        let placed = false;
-        outer: for (const h of candidates) {
+        for (const candidateHeading of candidateHeadings) {
+            const { dx, dy } = HEADING_DELTA[candidateHeading];
+            let placed = false;
             for (const mult of multipliers) {
-                const { dx, dy } = HEADING_DELTA[h];
                 const len = segLen * mult;
                 if (len < CIRCLE_SEP) continue; // segment too short — circles would overlap
                 const nx = x + dx * len;
@@ -214,35 +231,21 @@ export function tryGenerate(
                     !overlaps(nx, ny, result) &&
                     !checkTooClose(x, y, nx, ny) &&
                     !checkCrossesCircle(x, y, nx, ny) &&
-                    !checkLabelZones(x, y, nx, ny)) {
+                    !checkOldSegsAtNewCircle(nx, ny) &&
+                    !checkLabelZones(x, y, nx, ny) &&
+                    !checkNewLabelVsOldSegs(nx, ny)) {
                     x = nx;
                     y = ny;
-                    heading = h;
+                    heading = candidateHeading;
+                    // Update turn label to reflect the actual heading taken
+                    if (!isWildcard && i > 1) {
+                        turn = candidateHeading === TURN_LEFT[origHeading] ? 'L' : 'R';
+                    }
                     placed = true;
-                    break outer;
+                    break;
                 }
             }
-        }
-
-        if (!placed) {
-            // Last resort: pick the heading that maximises clearance from existing waypoints.
-            // origX/origY must be fixed for all candidates so each move stays axis-aligned.
-            const origX = x, origY = y;
-            let bestClearance = -1;
-            for (const h of candidates) {
-                const { dx, dy } = HEADING_DELTA[h];
-                const nx = Math.max(padding, Math.min(W - padding, origX + dx * segLen));
-                const ny = Math.max(padding, Math.min(H - padding, origY + dy * segLen));
-                const clearance = result.length > 0
-                    ? Math.min(...result.map(w => Math.hypot(nx - w.x, ny - w.y)))
-                    : Infinity;
-                if (clearance > bestClearance) {
-                    bestClearance = clearance;
-                    x = nx;
-                    y = ny;
-                    heading = h;
-                }
-            }
+            if (placed) break;
         }
 
         cumDist += segLen;
@@ -294,6 +297,20 @@ export function isValid(waypoints: WaypointData[]): boolean {
     for (let i = 1; i < waypoints.length - 1; i++) {
         const { x, y } = turnLabelPos(waypoints[i]);
         if (labelDistToPath(x, y, i, waypoints) < TURN_LABEL_CLEARANCE) return false;
+    }
+
+    // Each waypoint's outbound turn label must match the actual heading to the next waypoint.
+    // Waypoint 1 (index 0) has no displayed turn label — skip it.
+    for (let i = 1; i < waypoints.length - 1; i++) {
+        const wp = waypoints[i];
+        const next = waypoints[i + 1];
+        if (wp.turn === 'Wildcard') {
+            if (next.heading !== wp.heading) return false;
+        } else if (wp.turn === 'R') {
+            if (next.heading !== TURN_RIGHT[wp.heading]) return false;
+        } else {
+            if (next.heading !== TURN_LEFT[wp.heading]) return false;
+        }
     }
 
     return true;

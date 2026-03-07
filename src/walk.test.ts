@@ -173,10 +173,11 @@ describe('isValid()', () => {
 
     it('two horizontal segments gap >= LINE_SEP → true', () => {
         // Rectangle with all circles >= 200px apart and segment gap = 200px >= 55px.
+        // Headings record the direction arriving at each waypoint: N→E→S→W
         const path: WaypointData[] = [
-            { x: 0,   y: 0,   number: 1, turn: 'R', heading: 'E', isWildcard: false, cumulativeDistance: 0 },
-            { x: 300, y: 0,   number: 2, turn: 'R', heading: 'S', isWildcard: false, cumulativeDistance: 300 },
-            { x: 300, y: 200, number: 3, turn: 'R', heading: 'W', isWildcard: false, cumulativeDistance: 500 },
+            { x: 0,   y: 0,   number: 1, turn: 'R', heading: 'N', isWildcard: false, cumulativeDistance: 0 },
+            { x: 300, y: 0,   number: 2, turn: 'R', heading: 'E', isWildcard: false, cumulativeDistance: 300 },
+            { x: 300, y: 200, number: 3, turn: 'R', heading: 'S', isWildcard: false, cumulativeDistance: 500 },
             { x: 0,   y: 200, number: 4, turn: 'R', heading: 'W', isWildcard: false, cumulativeDistance: 800 },
         ];
         expect(isValid(path)).toBe(true);
@@ -323,29 +324,83 @@ describe('centering logic', () => {
     });
 });
 
+// ─── Turn / heading consistency ──────────────────────────────────────────────
+
+describe('turn / heading consistency', () => {
+    // Mirrors the app: regenerate turns + wildcards every attempt for reliable success.
+    function generate(count: number): WaypointData[] {
+        let result: WaypointData[] = [];
+        let scale = 1.0;
+        const wildcardCount = Math.max(1, Math.round(count / 9));
+        outer: for (let tier = 0; tier < 50; tier++) {
+            const W = Math.round(A4_W * scale), H = Math.round(A4_H * scale);
+            for (let attempt = 0; attempt < 50; attempt++) {
+                const turns = Array.from({ length: count }, () =>
+                    Math.random() < 0.5 ? 'L' : 'R'
+                ) as Array<'L' | 'R'>;
+                const pool = Array.from({ length: count }, (_, i) => i)
+                    .filter(i => i !== 0 && i !== 1 && i !== count - 1);
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+                const wildcards = new Set(pool.slice(0, wildcardCount));
+                const candidate = tryGenerate(W, H, turns, count, wildcards);
+                if (isValid(candidate)) { result = candidate; break outer; }
+            }
+            scale += 0.1;
+        }
+        return result;
+    }
+
+    it.each([10, 45, 90])('count=%i: outbound heading matches turn label for every non-endpoint waypoint', (count) => {
+        const result = generate(count);
+        expect(result.length).toBe(count);
+        // Check waypoints index 1 … length-2 (those that display a turn label)
+        for (let i = 1; i < result.length - 1; i++) {
+            const wp = result[i];
+            const next = result[i + 1];
+            if (wp.turn === 'Wildcard') {
+                expect(next.heading).toBe(wp.heading);
+            } else if (wp.turn === 'R') {
+                expect(next.heading).toBe(TURN_RIGHT[wp.heading]);
+            } else {
+                expect(next.heading).toBe(TURN_LEFT[wp.heading]);
+            }
+        }
+    });
+
+    it('first two waypoints always travel North', () => {
+        const turns: Array<'L' | 'R'> = Array(10).fill('R');
+        const result = tryGenerate(A4_W, A4_H, turns, 10, new Set());
+        expect(result[0].heading).toBe('N');
+        expect(result[1].heading).toBe('N');
+    });
+});
+
 // ─── generateWalk() integration ──────────────────────────────────────────────
 
 describe('generateWalk() integration via isValid', () => {
     it.each([10, 45, 90])('count=%i: isValid passes and length matches', (count) => {
-        const turns: Array<'L' | 'R'> = Array.from({ length: count }, () =>
-            Math.random() < 0.5 ? 'L' : 'R'
-        );
         const wildcardCount = Math.max(1, Math.round(count / 9));
-        const pool = Array.from({ length: count }, (_, i) => i)
-            .filter(i => i !== 0 && i !== 1 && i !== count - 1);
-        for (let i = pool.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [pool[i], pool[j]] = [pool[j], pool[i]];
-        }
-        const wildcards = new Set(pool.slice(0, wildcardCount));
 
-        // Mirror the app's retry loop: up to 50 attempts per canvas size, growing by 10% each tier.
+        // Regenerate turns + wildcards every attempt (mirrors the app) for reliable success.
         let result: WaypointData[] = [];
         let scale = 1.0;
-        outer: for (let tier = 0; tier < 20; tier++) {
+        outer: for (let tier = 0; tier < 50; tier++) {
             const W = Math.round(A4_W * scale);
             const H = Math.round(A4_H * scale);
             for (let attempt = 0; attempt < 50; attempt++) {
+                const turns = Array.from({ length: count }, () =>
+                    Math.random() < 0.5 ? 'L' : 'R'
+                ) as Array<'L' | 'R'>;
+                const pool = Array.from({ length: count }, (_, i) => i)
+                    .filter(i => i !== 0 && i !== 1 && i !== count - 1);
+                for (let i = pool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pool[i], pool[j]] = [pool[j], pool[i]];
+                }
+                const wildcards = new Set(pool.slice(0, wildcardCount));
                 const candidate = tryGenerate(W, H, turns, count, wildcards);
                 if (isValid(candidate)) { result = candidate; break outer; }
             }
