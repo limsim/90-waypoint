@@ -43,7 +43,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - Connect consecutive waypoints with **straight orthogonal lines** (no diagonals, no mid-segment corners). Each segment is either purely horizontal or purely vertical — turns happen at waypoints, not within them.
 - Line colour: dark grey or black.
 - Line weight: 2px.
-- Parallel path lines must maintain a **comfortable minimum separation** — no two parallel segments that share overlapping range should be closer than the circle diameter (50px). If a new segment would run too close to an existing parallel segment, try alternative headings or segment lengths before placing.
+- Parallel path lines must maintain a **comfortable minimum separation** — no two parallel segments that share overlapping range should be closer than **55px**. If a new segment would run too close to an existing parallel segment, try alternative segment lengths before placing.
 
 ### Waypoints
 - Each waypoint is a **circle, radius 25px**, centred at its coordinate.
@@ -62,11 +62,12 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 ### Iterate design
 - Iterate designs until all of the following criteria are met:
   - No two waypoint circles overlap.
-  - No two parallel path segments with overlapping range are closer than 50px.
+  - No two parallel path segments with overlapping range are closer than 55px.
   - No path segment passes through a non-adjacent waypoint circle.
+  - No existing segment passes through a non-adjacent waypoint circle.
   - Every turn label's fixed NE position has at least 8px clearance from all non-adjacent path segments.
 - Path lines can be any length to satisfy spacing — segment lengths may be scaled up by multipliers (up to 8×).
-- During placement, candidate segments that would violate any of the above criteria (including passing through a waypoint's label zone) are rejected before trying other multipliers or headings.
+- During placement, all of the above criteria are checked proactively before accepting a candidate position. This includes checking that existing segments do not cross the new waypoint's circle, and that the new waypoint's label has clearance from all existing segments.
 - If neither the intended nor the fallback turn can place the next waypoint, the attempt fails and retries (no fallback to straight or 180° headings).
 - Only render the design when all criteria are met.
 
@@ -87,7 +88,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 
 ## Canvas Size
 - Canvas starts at A4 size (794×1123px at 96 PPI).
-- If no valid layout can be found after 50 attempts at the current size, the canvas grows by 10% and generation retries. This repeats until a valid walk is produced.
+- If no valid layout can be found after 200 attempts at the current size, the canvas grows by 10% and generation retries. This repeats until a valid walk is produced.
 - The path auto-centres after generation so the full walk is visible within the canvas.
 - If the canvas is wider than the viewport, it scales down to fit (preserving aspect ratio) so it always fits on screen without horizontal scrolling.
 
