@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "serve": "python3 -m http.server 8000",
+    "serve": "node serve.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

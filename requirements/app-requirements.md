@@ -39,7 +39,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - Grid lines are subtle (light grey), with **60px cell size**.
 
 ### Path Lines
-- Connect consecutive waypoints with **orthogonal lines** (no diagonals), drawn in the direction of the outbound turn at each waypoint: right turns corner horizontally first; left turns corner vertically first; wildcards follow the current heading.
+- Connect consecutive waypoints with **straight orthogonal lines** (no diagonals, no mid-segment corners). Each segment is either purely horizontal or purely vertical — turns happen at waypoints, not within them.
 - Line colour: dark grey or black.
 - Line weight: 2px.
 - Parallel path lines must maintain a **comfortable minimum separation** — no two parallel segments that share overlapping range should be closer than the circle diameter (50px). If a new segment would run too close to an existing parallel segment, try alternative headings or segment lengths before placing.
@@ -49,15 +49,25 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - **Waypoint 1 (start):** Black fill, white border, white number.
 - **Last waypoint (end):** Black fill, white border, white number.
 - **All other waypoints:** White fill, black border, black number.
-- Wildcard waypoints: add a secondary visual marker (e.g. a small star or coloured ring).
+- Wildcard waypoints display an **orange ring** (3px stroke) drawn at radius 30px outside the circle centre.
 - Label each waypoint with its sequence number in bold Arial 20px, centred in the circle.
 - Waypoints must not overlap — no two waypoint circles may share the same position or overlap each other.
 
+### Turn Labels
+- The outbound turn (L, R, or W for wildcard) is displayed as a small label beside each waypoint (first and last waypoints have no label).
+- Labels are always placed at the **fixed top-right (NE, 45°)** position, at **46px from the waypoint centre**. This offset ensures the label clears the wildcard ring outer edge (~31.5px) with comfortable margin.
+- The label position must maintain at least **8px clearance** from all non-adjacent path line segments. Generation steers path segments away from label zones proactively during placement; a layout is considered invalid if any label would be closer than 8px to a non-adjacent segment.
+
 ### Iterate design
-- Iterate designs until all path lines and waypoints have **comfortable minimum separation** AND **no overlapping waypoints**.
-- Path lines can be any length to prioritise **comfortable minimum separation** — segment lengths may be scaled up by multipliers (up to 8×) to satisfy spacing constraints.
+- Iterate designs until all of the following criteria are met:
+  - No two waypoint circles overlap.
+  - No two parallel path segments with overlapping range are closer than 50px.
+  - No path segment passes through a non-adjacent waypoint circle.
+  - Every turn label's fixed NE position has at least 8px clearance from all non-adjacent path segments.
+- Path lines can be any length to satisfy spacing — segment lengths may be scaled up by multipliers (up to 8×).
+- During placement, candidate segments that would violate any of the above criteria (including passing through a waypoint's label zone) are rejected before trying other multipliers or headings.
 - If no valid position can be found with any heading/length combination, fall back to the heading that maximises clearance from existing waypoints (this placement may still fail validation and trigger a new attempt).
-- Only render the design when the above criteria has been met.
+- Only render the design when all criteria are met.
 
 ---
 
@@ -104,4 +114,4 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 - Vanilla TypeScript with the Canvas 2D API — no external runtime dependencies.
 - Single-file source (`src/index.ts`) compiled to `dist/index.js`, loaded by `index.html`.
 - Build: `npm run build` (TypeScript compiler).
-- Dev: `npm run dev` (watch mode) + `npm run serve` (Python HTTP server on port 8000).
+- Dev: `npm run dev` (watch mode) + `npm run serve` (Node.js static server, starts on port 8000 and automatically tries the next port if that port is already in use).

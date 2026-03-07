@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
     A4_H, A4_W, CIRCLE_R, CIRCLE_SEP, LINE_SEP,
     Heading, WaypointData,
-    inBounds, isValid, overlaps, segCrossesCircle, segTooClose, tryGenerate,
+    inBounds, isValid, overlaps, pointToSegDist, segCrossesCircle, segTooClose, tryGenerate,
+    TURN_LABEL_OFFSET, turnLabelPos,
     TURN_LEFT, TURN_RIGHT,
 } from './walk';
 
@@ -14,11 +15,12 @@ const wp = (x: number, y: number): WaypointData => ({
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 describe('constants', () => {
-    it('CIRCLE_SEP is 72', () => expect(CIRCLE_SEP).toBe(72));
-    it('LINE_SEP is 55',   () => expect(LINE_SEP).toBe(55));
-    it('CIRCLE_R is 25',   () => expect(CIRCLE_R).toBe(25));
-    it('A4_W is 794',      () => expect(A4_W).toBe(794));
-    it('A4_H is 1123',     () => expect(A4_H).toBe(1123));
+    it('CIRCLE_SEP is 72',        () => expect(CIRCLE_SEP).toBe(72));
+    it('LINE_SEP is 55',          () => expect(LINE_SEP).toBe(55));
+    it('CIRCLE_R is 25',          () => expect(CIRCLE_R).toBe(25));
+    it('A4_W is 794',             () => expect(A4_W).toBe(794));
+    it('A4_H is 1123',            () => expect(A4_H).toBe(1123));
+    it('TURN_LABEL_OFFSET is 46', () => expect(TURN_LABEL_OFFSET).toBe(46));
 });
 
 // ─── TURN_LEFT / TURN_RIGHT ──────────────────────────────────────────────────
@@ -86,6 +88,64 @@ describe('segCrossesCircle()', () => {
 
     it('segment that misses circle → false', () =>
         expect(segCrossesCircle(0, 200, 400, 200,   100, 100, CIRCLE_R)).toBe(false));
+});
+
+// ─── pointToSegDist() ────────────────────────────────────────────────────────
+
+describe('pointToSegDist()', () => {
+    it('point on a horizontal segment → 0', () =>
+        expect(pointToSegDist(50, 0, 0, 0, 100, 0)).toBeCloseTo(0));
+
+    it('point directly above midpoint of horizontal segment', () =>
+        expect(pointToSegDist(50, 30, 0, 0, 100, 0)).toBeCloseTo(30));
+
+    it('point beyond the right end of a horizontal segment (nearest = endpoint)', () =>
+        expect(pointToSegDist(150, 0, 0, 0, 100, 0)).toBeCloseTo(50));
+
+    it('point on a vertical segment → 0', () =>
+        expect(pointToSegDist(0, 50, 0, 0, 0, 100)).toBeCloseTo(0));
+
+    it('point to the left of a vertical segment', () =>
+        expect(pointToSegDist(-20, 50, 0, 0, 0, 100)).toBeCloseTo(20));
+
+    it('point beyond the bottom end of a vertical segment (nearest = endpoint)', () =>
+        expect(pointToSegDist(0, 150, 0, 0, 0, 100)).toBeCloseTo(50));
+});
+
+// ─── turnLabelPos() ──────────────────────────────────────────────────────────
+
+describe('turnLabelPos()', () => {
+    const makeWp = (x: number, y: number): WaypointData => ({
+        x, y, number: 2, turn: 'R', heading: 'E', isWildcard: false, cumulativeDistance: 0,
+    });
+
+    it('returns position at approximately TURN_LABEL_OFFSET distance from waypoint centre', () => {
+        const pos = turnLabelPos(makeWp(200, 300));
+        // 0.707 is an approximation of cos(45°); allow 0.1px tolerance
+        expect(Math.hypot(pos.x - 200, pos.y - 300)).toBeCloseTo(TURN_LABEL_OFFSET, 1);
+    });
+
+    it('places label to the right of and above the waypoint (NE)', () => {
+        const pos = turnLabelPos(makeWp(200, 300));
+        expect(pos.x).toBeGreaterThan(200);
+        expect(pos.y).toBeLessThan(300);
+    });
+
+    it('x and y offsets are equal (true 45° diagonal)', () => {
+        const pos = turnLabelPos(makeWp(200, 300));
+        expect(pos.x - 200).toBeCloseTo(300 - pos.y);
+    });
+
+    it('respects a custom offset argument', () => {
+        const pos = turnLabelPos(makeWp(100, 100), 60);
+        expect(Math.hypot(pos.x - 100, pos.y - 100)).toBeCloseTo(60, 1);
+    });
+
+    it('label clears the wildcard ring outer edge (r + 5 + 1.5 stroke ≈ 31.5px)', () => {
+        const pos = turnLabelPos(makeWp(0, 0));
+        const distFromCenter = Math.hypot(pos.x, pos.y);
+        expect(distFromCenter).toBeGreaterThan(31.5 + 8); // ring edge + TURN_LABEL_CLEARANCE
+    });
 });
 
 // ─── isValid() ───────────────────────────────────────────────────────────────

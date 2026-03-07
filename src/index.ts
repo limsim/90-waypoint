@@ -2,7 +2,7 @@ import {
     WaypointData, Heading,
     HEADING_DELTA, TURN_LEFT, TURN_RIGHT,
     CIRCLE_R, A4_W, A4_H, ATTEMPTS_PER_SIZE, SCALE_STEP,
-    tryGenerate, isValid,
+    tryGenerate, isValid, turnLabelPos,
 } from './walk.js';
 
 export class WaypointApp {
@@ -147,22 +147,7 @@ export class WaypointApp {
             ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
-            if (a.turn === 'R') {
-                ctx.lineTo(b.x, a.y); // right turn: horizontal first
-                ctx.lineTo(b.x, b.y);
-            } else if (a.turn === 'L') {
-                ctx.lineTo(a.x, b.y); // left turn: vertical first
-                ctx.lineTo(b.x, b.y);
-            } else {
-                // wildcard: no turn, continue in heading direction
-                if (b.heading === 'N' || b.heading === 'S') {
-                    ctx.lineTo(a.x, b.y);
-                    ctx.lineTo(b.x, b.y);
-                } else {
-                    ctx.lineTo(b.x, a.y);
-                    ctx.lineTo(b.x, b.y);
-                }
-            }
+            ctx.lineTo(b.x, b.y);
             ctx.stroke();
         }
     }
@@ -170,10 +155,10 @@ export class WaypointApp {
     private drawWaypoints(): void {
         const showWildcards = this.showWildcardsCheckbox.checked;
         const showTurns = this.showTurnsCheckbox.checked;
-        this.waypoints.forEach((wp, i) => this.drawWaypoint(wp, i === this.hoveredIndex, showWildcards, showTurns));
+        this.waypoints.forEach((wp, i) => this.drawWaypoint(wp, i, i === this.hoveredIndex, showWildcards, showTurns));
     }
 
-    private drawWaypoint(wp: WaypointData, isHovered: boolean, showWildcards: boolean, showTurns: boolean): void {
+    private drawWaypoint(wp: WaypointData, index: number, isHovered: boolean, showWildcards: boolean, showTurns: boolean): void {
         const ctx = this.ctx;
         const r = 25;
         const isEndpoint = wp.number === 1 || wp.number === this.waypoints.length;
@@ -210,12 +195,12 @@ export class WaypointApp {
 
         if (showTurns && wp.number !== 1 && wp.number !== this.waypoints.length) {
             const label = wp.turn === 'Wildcard' ? 'W' : wp.turn;
-            const offset = r + 10;
+            const { x: lx, y: ly } = turnLabelPos(wp);
             ctx.font = 'bold 13px Arial';
             ctx.fillStyle = wp.turn === 'Wildcard' ? '#f5a623' : '#e00';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(label, wp.x + offset * 0.707, wp.y - offset * 0.707);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, lx, ly);
         }
     }
 
