@@ -22,7 +22,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 ### Distances
 - The distance between consecutive waypoints (segment length) is **randomised per segment**, between **60px and 140px**.
 - All waypoints must remain within the canvas bounds (30px padding from all edges).
-- Each segment must exit the waypoint in a direction consistent with the outbound turn label. The intended turn (L or R from the random sequence) is tried first; if it fails, the opposite turn is tried as a fallback. The turn label is updated to match whichever direction succeeds, so labels always reflect the actual path. If neither turn can place the next waypoint, the generation attempt fails and retries.
+- Each segment must exit the waypoint in a direction strictly consistent with the outbound turn label. Only the intended turn (L or R from the random sequence) is attempted — there is no opposite-turn fallback. Turn labels always match the random sequence exactly. If the intended turn cannot place the next waypoint for any segment length, the generation attempt fails and retries. A lookahead check is performed before committing to a position: if placing waypoint i would leave no valid position for waypoint i+1 (or i+2), the candidate is skipped in favour of one that keeps future placements open.
 
 ### Wildcards
 - A wildcard skips a waypoint's turn — the walker continues straight ahead instead of turning.
@@ -68,7 +68,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
   - Every turn label's fixed NE position has at least 8px clearance from all non-adjacent path segments.
 - Path lines can be any length to satisfy spacing — segment lengths may be scaled up by multipliers (up to 8×).
 - During placement, all of the above criteria are checked proactively before accepting a candidate position. This includes checking that existing segments do not cross the new waypoint's circle, and that the new waypoint's label has clearance from all existing segments.
-- If neither the intended nor the fallback turn can place the next waypoint, the attempt fails and retries (no fallback to straight or 180° headings).
+- If the intended turn cannot place the next waypoint for any segment length (including scaled multipliers), the attempt fails and retries (no fallback to opposite turn, straight, or 180° headings).
 - Only render the design when all criteria are met.
 
 ---
