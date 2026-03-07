@@ -59,20 +59,19 @@ export class WaypointApp {
             }
         }
 
-        // Resize canvas to the tier that succeeded
-        const W = Math.round(A4_W * scale);
-        const H = Math.round(A4_H * scale);
-        this.canvas.width  = W;
-        this.canvas.height = H;
-        this.updateDisplaySize();
-
-        // Centre path on the canvas
+        // Resize canvas to tightly fit the walk (100px padding matches grid padding)
+        const pad = 100;
         const xs = waypoints.map(w => w.x);
         const ys = waypoints.map(w => w.y);
-        const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-        const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-        const ox = W / 2 - cx;
-        const oy = H / 2 - cy;
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        this.canvas.width  = Math.round(maxX - minX + 2 * pad);
+        this.canvas.height = Math.round(maxY - minY + 2 * pad);
+        this.updateDisplaySize();
+
+        // Offset waypoints to sit within the padded bounds
+        const ox = pad - minX;
+        const oy = pad - minY;
         for (const w of waypoints) { w.x += ox; w.y += oy; }
 
         this.waypoints = waypoints;
