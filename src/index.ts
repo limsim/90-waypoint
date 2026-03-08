@@ -82,19 +82,13 @@ export class WaypointApp {
         const fitW = maxX - minX + 2 * pad;
         const fitH = maxY - minY + 2 * pad;
 
-        // Clamp to A4 — scale down if the walk is larger
-        const mapScale = Math.min(1, A4_W / fitW, A4_H / fitH);
-        this.canvas.width  = Math.round(fitW * mapScale);
-        this.canvas.height = Math.round(fitH * mapScale);
+        this.canvas.width  = Math.round(fitW);
+        this.canvas.height = Math.round(fitH);
         this.updateDisplaySize();
 
-        // Offset waypoints to sit within the padded bounds, then apply scale
         const ox = pad - minX;
         const oy = pad - minY;
-        for (const w of waypoints) {
-            w.x = (w.x + ox) * mapScale;
-            w.y = (w.y + oy) * mapScale;
-        }
+        for (const w of waypoints) { w.x += ox; w.y += oy; }
 
         this.waypoints = waypoints;
         this.hoveredIndex = -1;
@@ -105,14 +99,13 @@ export class WaypointApp {
     // ─── Canvas sizing ───────────────────────────────────────────────────────
 
     private updateDisplaySize(): void {
-        const maxW = window.innerWidth - 40;
-        if (this.canvas.width > maxW) {
-            this.canvas.style.width  = `${maxW}px`;
-            this.canvas.style.height = `${Math.round(this.canvas.height * maxW / this.canvas.width)}px`;
-        } else {
-            this.canvas.style.width  = `${this.canvas.width}px`;
-            this.canvas.style.height = `${this.canvas.height}px`;
-        }
+        const maxW = Math.min(window.innerWidth - 40, A4_W);
+        const maxH = A4_H;
+        const scaleByW = maxW / this.canvas.width;
+        const scaleByH = maxH / this.canvas.height;
+        const cssScale = Math.min(1, scaleByW, scaleByH);
+        this.canvas.style.width  = `${Math.round(this.canvas.width  * cssScale)}px`;
+        this.canvas.style.height = `${Math.round(this.canvas.height * cssScale)}px`;
     }
 
     // ─── Rendering ───────────────────────────────────────────────────────────
