@@ -87,8 +87,9 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 ---
 
 ## Canvas Size
-- Canvas starts at A4 size (794×1123px at 96 PPI).
-- If no valid layout can be found after 200 attempts at the current size, the canvas grows by 10% and generation retries. This repeats until a valid walk is produced.
+- The rendered canvas is always capped at A4 size (794×1123px at 96 PPI).
+- Internally, generation starts at A4 size. If no valid layout can be found after 200 attempts at the current size, the internal generation bounds grow by 10% and generation retries. This repeats until a valid walk is produced.
+- Once a valid walk is found, the bounding box of the waypoints (plus 100px padding) is computed and scaled down uniformly to fit within A4 if it exceeds those dimensions. Walks that already fit within A4 are not scaled.
 - The path auto-centres after generation so the full walk is visible within the canvas.
 - If the canvas is wider than the viewport, it scales down to fit (preserving aspect ratio) so it always fits on screen without horizontal scrolling.
 
