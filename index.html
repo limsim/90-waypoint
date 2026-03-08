@@ -90,6 +90,34 @@
             border-radius: 4px;
         }
 
+        #loading {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.75);
+            border-radius: 4px;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 14px;
+            color: #555;
+            z-index: 5;
+        }
+
+        #loading.visible { display: flex; }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #ddd;
+            border-top-color: #222;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         #tooltip {
             display: none;
             position: absolute;
@@ -191,6 +219,10 @@
         <div class="canvas-wrapper">
             <canvas id="waypointCanvas" width="794" height="1123"></canvas>
             <div id="tooltip"></div>
+            <div id="loading">
+                <div class="spinner"></div>
+                Generating…
+            </div>
         </div>
 
         <div class="legend">

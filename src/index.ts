@@ -13,6 +13,7 @@ export class WaypointApp {
     private showWildcardsCheckbox: HTMLInputElement;
     private showTurnsCheckbox: HTMLInputElement;
     private tooltip: HTMLDivElement;
+    private loading: HTMLDivElement;
     private hoveredIndex: number = -1;
 
     constructor() {
@@ -22,6 +23,7 @@ export class WaypointApp {
         this.showWildcardsCheckbox = document.getElementById('showWildcards') as HTMLInputElement;
         this.showTurnsCheckbox = document.getElementById('showTurns') as HTMLInputElement;
         this.tooltip = document.getElementById('tooltip') as HTMLDivElement;
+        this.loading = document.getElementById('loading') as HTMLDivElement;
         this.updateDisplaySize();
         this.setupEventListeners();
         this.generateWalk();
@@ -30,6 +32,18 @@ export class WaypointApp {
     // ─── Public entry point ──────────────────────────────────────────────────
 
     generateWalk(): void {
+        const generateBtn = document.getElementById('generateBtn') as HTMLButtonElement;
+        generateBtn.disabled = true;
+        this.loading.classList.add('visible');
+        // Yield to the browser so the loading overlay renders before the heavy work starts
+        setTimeout(() => {
+            this._runGeneration();
+            this.loading.classList.remove('visible');
+            generateBtn.disabled = false;
+        }, 0);
+    }
+
+    private _runGeneration(): void {
         let waypoints: WaypointData[] | null = null;
         let scale = 1.0;
         const count = Math.min(90, Math.max(10, parseInt(this.waypointCountInput.value, 10) || 90));

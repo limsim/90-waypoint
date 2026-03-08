@@ -77,7 +77,7 @@ Source: https://www.marcusjohnhenrybrown.com/the-90-waypoint-walk/
 
 | Control | Behaviour |
 |---|---|
-| **Generate Walk** | Clears the canvas and draws a new walk with a freshly randomised turn sequence and segment distances. |
+| **Generate Walk** | Clears the canvas and draws a new walk with a freshly randomised turn sequence and segment distances. The button is disabled and a loading overlay (spinner + "Generating…" label) is shown over the canvas while generation is in progress; both are restored when generation completes. |
 | **Clear** | Removes all waypoints and lines from the canvas. |
 | **Waypoints** | Number input, range 10–90, default 90. Sets the number of waypoints for the next generation. |
 | **Show/Hide Wildcards** | Toggle visibility of wildcard markers. Wildcards are **visible by default**. |
