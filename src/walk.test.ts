@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
     A4_H, A4_W, CIRCLE_R, CIRCLE_SEP, LINE_SEP,
     Heading, WaypointData,
-    inBounds, isValid, overlaps, pointToSegDist, segCrossesCircle, segTooClose, tryGenerate,
+    canPlace, inBounds, isValid, overlaps, pointToSegDist, segCrossesCircle, segTooClose, tryGenerate,
     TURN_LABEL_OFFSET, turnLabelPos,
     TURN_LEFT, TURN_RIGHT,
+    SEG_MIN, SEG_JITTER, MULTIPLIERS,
 } from './walk';
 
 // Minimal WaypointData for tests that only care about position
@@ -375,6 +376,103 @@ describe('turn / heading consistency', () => {
         const result = tryGenerate(A4_W, A4_H, turns, 10, new Set());
         expect(result[0].heading).toBe('N');
         expect(result[1].heading).toBe('N');
+    });
+});
+
+// ─── A1. Segment length constants ────────────────────────────────────────────
+
+describe('segment length constants', () => {
+    it('SEG_MIN is 60',    () => expect(SEG_MIN).toBe(60));
+    it('SEG_JITTER is 80', () => expect(SEG_JITTER).toBe(80));
+    it('base segment range is 60–140px (SEG_MIN + SEG_JITTER)',
+        () => expect(SEG_MIN + SEG_JITTER).toBe(140));
+});
+
+// ─── A2. Multipliers array ────────────────────────────────────────────────────
+
+describe('MULTIPLIERS', () => {
+    it('contains 8.0',           () => expect(MULTIPLIERS).toContain(8.0));
+    it('max multiplier is 8.0',  () => expect(Math.max(...MULTIPLIERS)).toBe(8.0));
+    it('contains 0.5',           () => expect(MULTIPLIERS).toContain(0.5));
+    it('has no value below 0.3', () => expect(Math.min(...MULTIPLIERS)).toBeGreaterThan(0.3));
+});
+
+// ─── A3. Turns NOT applied at indices 0 and 1 ────────────────────────────────
+
+describe('turns not applied at waypoint indices 0 and 1', () => {
+    it('result[0] and result[1] heading is N even with all-L turn sequence', () => {
+        const turns: Array<'L' | 'R'> = Array(20).fill('L');
+        const result = tryGenerate(A4_W, A4_H, turns, 20, new Set());
+        if (result.length < 2) return;
+        expect(result[0].heading).toBe('N');
+        expect(result[1].heading).toBe('N');
+    });
+
+    it('result[2] heading reflects the first applied turn (all-R → TURN_RIGHT[N] = E)', () => {
+        const turns: Array<'L' | 'R'> = Array(20).fill('R');
+        const result = tryGenerate(A4_W, A4_H, turns, 20, new Set());
+        if (result.length < 3) return;
+        expect(result[2].heading).toBe(TURN_RIGHT[result[1].heading]);
+    });
+});
+
+// ─── A4. canPlace enforces SEG_CLEAR_R = 35px ────────────────────────────────
+
+describe('canPlace() — SEG_CLEAR_R boundary', () => {
+    const W = 1000, H = 1000, PAD = 30;
+
+    // Note: canPlace skips the last entry in `result` for the segment-crosses-circle
+    // check (it is the segment start). A two-element array is needed so the obstacle
+    // waypoint is actually checked.
+
+    it('rejects a horizontal segment at 27px from a waypoint centre', () => {
+        // Obstacle at (200,200); segment from (100,227) to (300,227) passes 27px away.
+        const existing: WaypointData[] = [wp(200, 200), wp(100, 227)];
+        expect(canPlace(existing, 100, 227, 300, 227, W, H, PAD)).toBe(false);
+    });
+
+    it('accepts a horizontal segment at 36px from a waypoint centre', () => {
+        const existing: WaypointData[] = [wp(200, 200), wp(100, 236)];
+        expect(canPlace(existing, 100, 236, 300, 236, W, H, PAD)).toBe(true);
+    });
+
+    it('rejects a vertical segment at 27px from a waypoint centre', () => {
+        const existing: WaypointData[] = [wp(200, 200), wp(227, 100)];
+        expect(canPlace(existing, 227, 100, 227, 300, W, H, PAD)).toBe(false);
+    });
+
+    it('accepts a vertical segment at 36px from a waypoint centre', () => {
+        const existing: WaypointData[] = [wp(200, 200), wp(236, 100)];
+        expect(canPlace(existing, 236, 100, 236, 300, W, H, PAD)).toBe(true);
+    });
+});
+
+// ─── A5. isValid rejects layout where turn label is <8px from a non-adjacent segment
+
+describe('isValid() — turn label clearance', () => {
+    it('rejects layout where a turn label is <8px from a non-adjacent segment', () => {
+        // wp[1] at (100, 300); its NE label is at approximately (132.5, 267.5).
+        // Segment wp[2]→wp[3]: horizontal leg at segY = labelY - 4 (4px away = violation).
+        const { y: ly } = turnLabelPos({ x: 100, y: 300 } as WaypointData);
+        const segY = Math.round(ly - 4); // 4px above label → within TURN_LABEL_CLEARANCE (8)
+
+        const path: WaypointData[] = [
+            { x: 100, y: 500, number: 1, turn: 'R',  heading: 'N', isWildcard: false, cumulativeDistance: 0 },
+            { x: 100, y: 300, number: 2, turn: 'R',  heading: 'N', isWildcard: false, cumulativeDistance: 200 },
+            { x: 400, y: 300, number: 3, turn: 'R',  heading: 'E', isWildcard: false, cumulativeDistance: 500 },
+            { x: 400, y: segY, number: 4, turn: 'R', heading: 'S', isWildcard: false, cumulativeDistance: 500 + (300 - segY) },
+        ];
+        expect(isValid(path)).toBe(false);
+    });
+
+    it('accepts layout where all turn labels have ≥8px clearance', () => {
+        const path: WaypointData[] = [
+            { x: 100, y: 500, number: 1, turn: 'R', heading: 'N', isWildcard: false, cumulativeDistance: 0 },
+            { x: 100, y: 300, number: 2, turn: 'R', heading: 'N', isWildcard: false, cumulativeDistance: 200 },
+            { x: 400, y: 300, number: 3, turn: 'R', heading: 'E', isWildcard: false, cumulativeDistance: 500 },
+            { x: 400, y: 100, number: 4, turn: 'R', heading: 'S', isWildcard: false, cumulativeDistance: 700 },
+        ];
+        expect(isValid(path)).toBe(true);
     });
 });
 

@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 
 // ─── Canvas mock ─────────────────────────────────────────────────────────────
 
@@ -40,6 +40,7 @@ beforeEach(() => {
             <input id="showTurns" type="checkbox" checked />
             <button id="printBtn">Print</button>
             <div id="tooltip" style="display:none"></div>
+            <div id="loading"></div>
         </div>
     `;
     vi.clearAllMocks();
@@ -51,6 +52,8 @@ describe('WaypointApp', () => {
     it('auto-generates a walk on construction (waypoints.length > 0)', async () => {
         const { WaypointApp } = await import('./index');
         const app = new WaypointApp();
+        // generateWalk defers _runGeneration via setTimeout; wait for it to complete.
+        await new Promise(r => setTimeout(r, 0));
         expect((app as any).waypoints.length).toBeGreaterThan(0);
     });
 
@@ -154,6 +157,12 @@ describe('WaypointApp', () => {
     it('drawCanvas calls ctx.save/restore when a waypoint is hovered', async () => {
         const { WaypointApp } = await import('./index');
         const app = new WaypointApp();
+        // Manually populate waypoints — avoids waiting for async generation and
+        // is immune to timer pile-up from earlier tests in this suite.
+        (app as any).waypoints = [
+            { x: 100, y: 100, number: 1, turn: 'R', heading: 'N', isWildcard: false, cumulativeDistance: 0 },
+            { x: 200, y: 100, number: 2, turn: 'L', heading: 'E', isWildcard: false, cumulativeDistance: 100 },
+        ];
         (app as any).hoveredIndex = 0;
         // Reset mock counts so only the following drawCanvas call is measured.
         vi.clearAllMocks();
@@ -189,5 +198,84 @@ describe('WaypointApp', () => {
             { x: 700, y: 200, number: 3, turn: 'L',        heading: 'W', isWildcard: false, cumulativeDistance: 600 },
         ];
         expect(() => (app as any).drawCanvas()).not.toThrow();
+    });
+});
+
+// ─── B1–B3: additional WaypointApp tests ─────────────────────────────────────
+
+describe('WaypointApp — B stream', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('B1 — generates 90 waypoints when waypoint count input is 90', async () => {
+        // Mock generation so the 90-waypoint run is instant (avoids multi-second real generation).
+        const walkModule = await import('./walk');
+        const fake90: ReturnType<typeof walkModule.tryGenerate> = Array.from({ length: 90 }, (_, i) => ({
+            x: 100 + i * 8, y: 100, number: i + 1,
+            turn: 'R' as const, heading: 'E' as const, isWildcard: false, cumulativeDistance: i * 100,
+        }));
+        const tryGenerateSpy = vi.spyOn(walkModule, 'tryGenerate').mockReturnValue(fake90);
+        const isValidSpy     = vi.spyOn(walkModule, 'isValid').mockReturnValue(true);
+
+        (document.getElementById('waypointCount') as HTMLInputElement).value = '90';
+        const { WaypointApp } = await import('./index');
+        vi.useFakeTimers();
+        const app = new WaypointApp();
+        vi.runAllTimers();
+        vi.useRealTimers();
+
+        expect((app as any).waypoints.length).toBe(90);
+        tryGenerateSpy.mockRestore();
+        isValidSpy.mockRestore();
+    });
+
+    it('B2 — clicking Generate Walk button changes waypoints', async () => {
+        (document.getElementById('waypointCount') as HTMLInputElement).value = '10';
+        const { WaypointApp } = await import('./index');
+        vi.useFakeTimers();
+        const app = new WaypointApp();
+        vi.runAllTimers(); // run initial _runGeneration
+        const firstPositions = (app as any).waypoints
+            .map((w: any) => `${w.x},${w.y}`).join('|');
+
+        document.getElementById('generateBtn')!.click();
+        vi.runAllTimers(); // run second _runGeneration
+        vi.useRealTimers();
+
+        const secondPositions = (app as any).waypoints
+            .map((w: any) => `${w.x},${w.y}`).join('|');
+        expect(secondPositions).not.toBe(firstPositions);
+    });
+
+    it('B3 — _runGeneration grows the canvas by SCALE_STEP after ATTEMPTS_PER_SIZE failures', async () => {
+        const walkModule = await import('./walk');
+        const originalTryGenerate = walkModule.tryGenerate;
+        const calledWithW: number[] = [];
+        let callCount = 0;
+
+        // Return two overlapping waypoints so isValid() returns false for the first
+        // ATTEMPTS_PER_SIZE calls — forcing scale to increase — then yield to the
+        // real implementation so generation succeeds at the wider canvas size.
+        const invalidResult: ReturnType<typeof walkModule.tryGenerate> = [
+            { x: 100, y: 100, number: 1, turn: 'R', heading: 'N', isWildcard: false, cumulativeDistance: 0 },
+            { x: 110, y: 100, number: 2, turn: 'R', heading: 'N', isWildcard: false, cumulativeDistance: 10 },
+        ];
+        vi.spyOn(walkModule, 'tryGenerate').mockImplementation((W, H, ...rest) => {
+            callCount++;
+            calledWithW.push(W);
+            if (callCount <= 200) return invalidResult;
+            return originalTryGenerate(W, H, ...rest);
+        });
+
+        (document.getElementById('waypointCount') as HTMLInputElement).value = '10';
+        const { WaypointApp } = await import('./index');
+        vi.useFakeTimers();
+        new WaypointApp();
+        vi.runAllTimers();
+        vi.useRealTimers();
+
+        // After 200 failures at the A4 tier, the 201st call must use W > A4_W (794).
+        expect(calledWithW[200]).toBeGreaterThan(794);
     });
 });

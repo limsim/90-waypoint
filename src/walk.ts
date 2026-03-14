@@ -20,10 +20,27 @@ export const HEADING_DELTA: Record<Heading, { dx: number; dy: number }> = {
 export const TURN_LEFT: Record<Heading, Heading>  = { N: 'W', W: 'S', S: 'E', E: 'N' };
 export const TURN_RIGHT: Record<Heading, Heading> = { N: 'E', E: 'S', S: 'W', W: 'N' };
 
+// Base minimum segment length
+export const SEG_MIN = 60;
+// Random jitter added on top of SEG_MIN to vary segment length
+export const SEG_JITTER = 80;
+// Ordered set of length multipliers tried during generation
+export const MULTIPLIERS: readonly number[] = [
+    1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33,
+    5.0, 6.0, 7.0, 8.0,
+    // Fill gaps: 0.5→0.75 (critical for near-wall placements with large segLen)
+    0.60, 0.65, 0.70,
+    // Fill gap: 1.0→1.5
+    1.1, 1.25,
+];
+
 // Minimum centre-to-centre distance before two circles visually overlap (diameter + 22px gap)
 export const CIRCLE_SEP = 72;
 // Waypoint circle radius
 export const CIRCLE_R = 25;
+// Minimum distance from any path segment centre-line to any waypoint centre.
+// Accounts for: circle radius (25) + wildcard ring overhang (5) + comfortable margin (5).
+export const SEG_CLEAR_R = 35;
 // Minimum separation between parallel path lines (just above circle diameter)
 export const LINE_SEP = 55;
 // A4 portrait at 96 PPI
@@ -155,12 +172,12 @@ export function canPlace(
     // New segment crosses existing circles (skip segment-start circle = last in result)
     const lastIdx = result.length - 1;
     for (let k = 0; k < lastIdx; k++) {
-        if (segCrossesCircle(fromX, fromY, toX, toY, result[k].x, result[k].y, CIRCLE_R)) return false;
+        if (segCrossesCircle(fromX, fromY, toX, toY, result[k].x, result[k].y, SEG_CLEAR_R)) return false;
     }
 
     // Existing segments pass through new circle
     for (let j = 0; j < result.length - 1; j++) {
-        if (pointToSegDist(toX, toY, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < CIRCLE_R) return false;
+        if (pointToSegDist(toX, toY, result[j].x, result[j].y, result[j + 1].x, result[j + 1].y) < SEG_CLEAR_R) return false;
     }
 
     // New segment vs existing label zones (skip index 0 — waypoint 1 has no label)
@@ -187,22 +204,12 @@ export function tryGenerate(
     wildcardIndices: Set<number>,
 ): WaypointData[] {
     const padding = 30;
-    const minDist = 60;
 
     let x = W / 2;
     let y = H / 2;
     let heading: Heading = 'N';
     let cumDist = 0;
     const result: WaypointData[] = [];
-
-    const multipliers = [
-        1.0, 1.5, 2.0, 0.75, 2.5, 0.5, 3.0, 4.0, 0.33,
-        5.0, 6.0, 7.0, 8.0,
-        // Fill gaps: 0.5→0.75 (critical for near-wall placements with large segLen)
-        0.60, 0.65, 0.70,
-        // Fill gap: 1.0→1.5
-        1.1, 1.25,
-    ];
     // Smaller set used at the inner (depth-1) level to keep 2-step lookahead cheap.
     const lookaheadMults = [1.0, 0.75, 1.5, 0.5, 2.0, 3.0, 4.0, 0.65];
 
@@ -221,8 +228,8 @@ export function tryGenerate(
         if (nextIdx >= count) return true;
         const nextHeading = intendedHeadingFor(nextIdx, tentativeResult[tentativeResult.length - 1].heading);
         const { dx, dy } = HEADING_DELTA[nextHeading];
-        const baseLookaheadLen = minDist + 40;
-        for (const mult of multipliers) {
+        const baseLookaheadLen = SEG_MIN + 40;
+        for (const mult of MULTIPLIERS) {
             const len = baseLookaheadLen * mult;
             if (len < CIRCLE_SEP) continue;
             const nx = fromX + dx * len, ny = fromY + dy * len;
@@ -249,11 +256,11 @@ export function tryGenerate(
         const turn: 'L' | 'R' | 'Wildcard' = isWildcard ? 'Wildcard' : turnSequence[i];
         const intendedHeading = intendedHeadingFor(i, heading);
 
-        const segLen = minDist + Math.random() * 80;
+        const segLen = SEG_MIN + Math.random() * SEG_JITTER;
         const { dx, dy } = HEADING_DELTA[intendedHeading];
 
         let fallback: { nx: number; ny: number } | null = null;
-        for (const mult of multipliers) {
+        for (const mult of MULTIPLIERS) {
             const len = segLen * mult;
             if (len < CIRCLE_SEP) continue;
             const nx = x + dx * len;
@@ -317,7 +324,7 @@ export function isValid(waypoints: WaypointData[]): boolean {
         const a = waypoints[i], b = waypoints[i + 1];
         for (let k = 0; k < waypoints.length; k++) {
             if (k === i || k === i + 1) continue;
-            if (segCrossesCircle(a.x, a.y, b.x, b.y, waypoints[k].x, waypoints[k].y, CIRCLE_R)) return false;
+            if (segCrossesCircle(a.x, a.y, b.x, b.y, waypoints[k].x, waypoints[k].y, SEG_CLEAR_R)) return false;
         }
     }
 
